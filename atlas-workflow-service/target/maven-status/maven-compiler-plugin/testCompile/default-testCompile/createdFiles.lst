@@ -1,0 +1,8 @@
+com\enterprise\atlas\workflow\service\CommandMappingIntegrationTest.class
+com\enterprise\atlas\workflow\service\CommandMappingIntegrationTest$TestConfig.class
+com\enterprise\atlas\workflow\service\WorkflowServiceTest.class
+com\enterprise\atlas\workflow\service\BucketApprovalIntegrationTest.class
+com\enterprise\atlas\workflow\service\CommandMappingIntegrationTest$MockApiController.class
+com\enterprise\atlas\workflow\service\EmitEventCommandIntegrationTest.class
+com\enterprise\atlas\workflow\service\KafkaIntegrationTest.class
+com\enterprise\atlas\workflow\service\WorkflowValidationIntegrationTest.class
