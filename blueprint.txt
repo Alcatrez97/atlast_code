@@ -1,0 +1,214 @@
+<USER_REQUEST>
+Google Antigravity Build Blueprint
+Project Codename
+Project Atlas
+
+Enterprise Workflow Orchestration & Decision Platform
+
+Primary Goal
+
+Build a configurable workflow orchestration platform capable of:
+
+Dynamic Workflow Definition
+Dynamic Bucket Creation
+Dynamic Context Resolution
+Dynamic Rule Evaluation
+Dynamic Routing
+Transaction Replay
+Explainability
+Visual Debugging
+
+without requiring code changes for normal business modifications.
+
+Non Goals
+
+Do NOT build:
+
+Simple BPM Tool
+Simple State Machine
+Simple Rule Engine
+Drools UI Wrapper
+
+This platform is a:
+
+Workflow Engine
++
+Context Engine
++
+Rule Engine
++
+Bucket Engine
++
+Execution Journal
++
+Debugger
+Repository Strategy
+
+Recommended:
+
+atlas-platform
+│
+├── atlas-ui
+│
+├── atlas-workflow-service
+│
+├── atlas-context-service
+│
+├── atlas-rule-service
+│
+├── atlas-execution-service
+│
+├── atlas-audit-service
+│
+├── atlas-integration-service
+│
+├── atlas-common
+│
+└── atlas-deployment
+Frontend Modules
+atlas-ui
+Module Structure
+src
+│
+├── workflow-designer
+│
+├── bucket-designer
+│
+├── context-catalog
+│
+├── rule-designer
+│
+├── debugger
+│
+├── replay
+│
+├── governance
+│
+├── administration
+│
+└── shared
+Backend Modules
+atlas-workflow-service
+
+Stores:
+
+Workflow Definitions
+Workflow Versions
+Workflow Publishing
+Workflow Validation
+atlas-context-service
+
+Handles:
+
+Variable Resolution
+Dependency Analysis
+Context Cache
+Lazy Loading
+atlas-rule-service
+
+Handles:
+
+Expression Evaluation
+Rule Compilation
+Rule Validation
+
+Drools integration remains isolated here.
+
+atlas-execution-service
+
+Responsible for:
+
+Workflow Runtime
+Bucket Runtime
+State Transitions
+DAG Execution
+
+This becomes the heart of the platform.
+
+atlas-audit-service
+
+Responsible for:
+
+Execution Journal
+Replay
+Audit Logs
+Explainability
+atlas-integration-service
+
+Responsible for:
+
+REST
+SOAP
+MQ
+DB
+Cache
+Custom Providers
+Technology Choices
+Backend
+Java 21
+Spring Boot 3.x
+Spring Data
+<truncated 3601 bytes>
+ine
+
+Expression Engine
+Sprint 6
+
+Build:
+
+Bucket Engine
+
+Dependencies
+Sprint 7
+
+Build:
+
+Execution Journal
+Sprint 8
+
+Build:
+
+Debugger
+
+Replay
+Sprint 9
+
+Build:
+
+Governance
+
+Publishing
+Sprint 10
+
+Build:
+
+Security
+
+RBAC
+
+Audit
+Instructions To Google Antigravity
+Must Follow
+Workflow definitions are source of truth.
+Runtime instances are immutable snapshots.
+Context resolution must be lazy.
+Rules must never directly invoke integrations.
+Execution journal must drive debugger.
+Published versions must be immutable.
+Buckets are first-class entities.
+Runtime execution model must be DAG based.
+Every decision must be explainable.
+Every execution must be replayable.
+Most Important Rule
+
+If a design decision must be made, always prefer:
+
+Maintainability
+Explainability
+Replayability
+Configurability
+
+over:
+
+Short-Term Simplicity
+

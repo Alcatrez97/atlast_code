@@ -1,0 +1,2 @@
+declare const _default: symbol | "__THEME_NESTED__";
+export default _default;
