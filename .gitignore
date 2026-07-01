@@ -1,0 +1,32 @@
+# Maven
+target/
+**/target/
+!.mvn/wrapper/maven-wrapper.jar
+/scratch/
+
+# Node/Vite UI
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
+*.local
+
+# H2 Database
+*.mv.db
+*.trace.db
+**/data/
+
+# IDEs and OS
+.idea/
+.settings/
+.vscode/
+.project
+.classpath
+.factorypath
+.DS_Store
+*.swp
+*.log
+logs/
+**/logs/
