@@ -56,6 +56,7 @@ export const NodePropertiesDrawer: React.FC<NodePropertiesDrawerProps> = ({
   const [inputMappingStr, setInputMappingStr] = useState('{}');
   const [outputMappingStr, setOutputMappingStr] = useState('{}');
   const [commandType, setCommandType] = useState('');
+  const [executionMode, setExecutionMode] = useState<'SYNC' | 'ASYNC'>('SYNC');
   const [eventType, setEventType] = useState('');
   const [routesStr, setRoutesStr] = useState('[]');
   const [defaultRoute, setDefaultRoute] = useState('');
@@ -129,6 +130,7 @@ export const NodePropertiesDrawer: React.FC<NodePropertiesDrawerProps> = ({
       setRoutesStr(node.data?.routes ? JSON.stringify(node.data.routes, null, 2) : '[]');
       setDefaultRoute(node.data?.defaultRoute || '');
       setFormStatus(node.data?.formStatus || node.data?.status || '');
+      setExecutionMode(node.data?.executionMode || 'SYNC');
       setSaved(false);
     }
   }, [node]);
@@ -175,6 +177,7 @@ export const NodePropertiesDrawer: React.FC<NodePropertiesDrawerProps> = ({
         }
       } else if (nodeType === 'COMMAND') {
         updatedData.commandType = commandType;
+        updatedData.executionMode = executionMode;
         if (commandType === 'CREATE_BUCKET') {
           updatedData.bucketId = bucketId;
           updatedData.dependencyBuckets = dependencyBuckets;
@@ -699,6 +702,20 @@ export const NodePropertiesDrawer: React.FC<NodePropertiesDrawerProps> = ({
                       <MenuItem value="SEND_NOTIFICATION" sx={{ fontSize: '12px' }}>Send Notification (SEND_NOTIFICATION)</MenuItem>
                       <MenuItem value="CALL_EXTERNAL_SYSTEM" sx={{ fontSize: '12px' }}>Call External System (CALL_EXTERNAL_SYSTEM)</MenuItem>
                       <MenuItem value="CREATE_CASE" sx={{ fontSize: '12px' }}>Create Case (CREATE_CASE)</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                    <InputLabel sx={{ fontSize: '12px' }}>Execution Mode</InputLabel>
+                    <Select
+                      label="Execution Mode"
+                      value={executionMode}
+                      onChange={(e) => setExecutionMode(e.target.value as 'SYNC' | 'ASYNC')}
+                      disabled={isReadOnly}
+                      sx={{ fontSize: '12px' }}
+                    >
+                      <MenuItem value="SYNC" sx={{ fontSize: '12px' }}>Synchronous (SYNC)</MenuItem>
+                      <MenuItem value="ASYNC" sx={{ fontSize: '12px' }}>Asynchronous (ASYNC)</MenuItem>
                     </Select>
                   </FormControl>
 

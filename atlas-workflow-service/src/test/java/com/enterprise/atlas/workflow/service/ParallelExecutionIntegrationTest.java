@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.*;
 
@@ -245,5 +246,87 @@ public class ParallelExecutionIntegrationTest {
         
         // Verify event payload merged into workflow context
         assertEquals(95000, finalInstance.getSerializedContext().get("amount"));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void testAsyncCommandNodeExecution() throws Exception {
+        String workflowKey = "ASYNC_CMD_WF_" + UUID.randomUUID().toString().substring(0, 8);
+        
+        WorkflowDefinitionDto defDto = new WorkflowDefinitionDto();
+        defDto.setKey(workflowKey);
+        defDto.setName("Async Command Flow Test " + workflowKey);
+        WorkflowDefinitionDto createdDef = workflowService.createWorkflowDefinition(defDto);
+        String versionId = createdDef.getVersions().get(0).getId();
+
+        List<WorkflowNodeDto> nodes = new ArrayList<>();
+        
+        WorkflowNodeDto startNode = new WorkflowNodeDto();
+        startNode.setId("start");
+        startNode.setType("START");
+        startNode.setLabel("Start");
+        nodes.add(startNode);
+
+        WorkflowNodeDto cmdNode = new WorkflowNodeDto();
+        cmdNode.setId("cmd-async");
+        cmdNode.setType("COMMAND");
+        cmdNode.setLabel("Asynchronous Task");
+        cmdNode.getData().put("commandType", "UPDATE_FORM_STATUS");
+        cmdNode.getData().put("formStatus", "COMPLETED_VIA_ASYNC");
+        cmdNode.getData().put("executionMode", "ASYNC");
+        nodes.add(cmdNode);
+
+        WorkflowNodeDto endNode = new WorkflowNodeDto();
+        endNode.setId("end");
+        endNode.setType("END");
+        endNode.setLabel("End");
+        nodes.add(endNode);
+
+        List<WorkflowEdgeDto> edges = new ArrayList<>();
+        edges.add(createEdge("e1", "start", "cmd-async"));
+        edges.add(createEdge("e2", "cmd-async", "end"));
+
+        WorkflowGraphDto graph = new WorkflowGraphDto();
+        graph.setNodes(nodes);
+        graph.setEdges(edges);
+
+        workflowService.updateDraftVersion(versionId, graph);
+        workflowService.transitionVersionStatus(versionId, "REVIEW");
+        workflowService.transitionVersionStatus(versionId, "APPROVED");
+        workflowService.transitionVersionStatus(versionId, "PUBLISHED");
+
+        ExecutionRequestDto request = new ExecutionRequestDto();
+        request.setBusinessKey("CAF_ASYNC_CMD_" + UUID.randomUUID().toString().substring(0, 8));
+        Map<String, Object> context = new HashMap<>();
+        context.put("cafId", "CAF_ASYNC_CMD_ID");
+        request.setContext(context);
+
+        ExecutionLogDto execLog = executionService.execute(workflowKey, request);
+        String instanceId = execLog.getInstanceId();
+
+        assertEquals("WAITING", execLog.getStatus());
+        assertEquals("cmd-async", execLog.getOutcomeNodeId());
+
+        WorkflowInstance instance = instanceRepository.findById(instanceId).orElseThrow();
+        assertEquals("WAITING", instance.getStatus());
+
+        long expiry = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < expiry) {
+            instance = instanceRepository.findById(instanceId).orElseThrow();
+            if ("COMPLETED".equalsIgnoreCase(instance.getStatus())) {
+                break;
+            }
+            Thread.sleep(500);
+        }
+
+        assertEquals("COMPLETED", instance.getStatus());
+        assertEquals("end", instance.getCurrentNodeId());
+
+        Map<String, Object> finalContext = instance.getSerializedContext();
+        assertNotNull(finalContext.get("commandOutputs"));
+        
+        Map<?, ?> outputs = (Map<?, ?>) finalContext.get("commandOutputs");
+        Map<?, ?> cmdOutput = (Map<?, ?>) outputs.get("cmd-async");
+        assertNotNull(cmdOutput);
     }
 }

@@ -820,6 +820,26 @@ public class GraphTraversalEngine {
                     context.remove("childOutputs");
                     context.remove("childInstanceId");
                 }
+            } else if ("COMMAND".equalsIgnoreCase(suspendedNode.getType()) && "ASYNC".equalsIgnoreCase(extractString(suspendedNode.getData(), "executionMode"))) {
+                currentNode = suspendedNode;
+                final String startId = startNodeId;
+                boolean hasStart = activeNodes.stream().anyMatch(n -> startId.equals(n.get("id")));
+                if (!hasStart) {
+                    activeNodes.add(convertNodeToMap(suspendedNode));
+                }
+                if (instance != null) {
+                    instance.setRuntimeGraph(runtimeGraph);
+                }
+                StepRecordDto resumeStep = new StepRecordDto();
+                resumeStep.setStepIndex(stepIdx++);
+                resumeStep.setNodeId(startNodeId);
+                resumeStep.setNodeType(suspendedNode.getType());
+                resumeStep.setLabel(suspendedNode.getLabel());
+                resumeStep.setStatus("RESUMED");
+                resumeStep.setNotes("Resumed workflow at asynchronous command node: " + suspendedNode.getLabel());
+                resumeStep.setEnteredAt(LocalDateTime.now());
+                resumeStep.setExitedAt(LocalDateTime.now());
+                trace.add(resumeStep);
             } else if ("WAIT_EVENT".equalsIgnoreCase(suspendedNode.getType())) {
                 String routingValueStr = null;
                 for (String key : List.of("status", "value", "outcome")) {
@@ -1025,26 +1045,102 @@ public class GraphTraversalEngine {
                     if (commandType == null) {
                         commandType = extractString(currentNode.getData(), "type");
                     }
-                    Map<String, Object> commandOutput = Map.of();
-                    if (commandType != null) {
-                        try {
-                            commandOutput = executeCommandNode(currentNode, instance, context, instanceId, contextId, version, spelCtx);
-                            step.setStatus("COMPLETED");
-                            step.setNotes("Executed command: " + commandType);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            System.out.println("COMMAND EXCEPTION: " + e.getMessage());
-                            step.setStatus("FAILED");
-                            step.setNotes("Failed to execute command: " + e.getMessage());
-                            recordTaskCompletion(ti, Map.of("error", e.getMessage()), "FAILED");
+                    
+                    String executionMode = extractString(currentNode.getData(), "executionMode");
+                    boolean isAsync = "ASYNC".equalsIgnoreCase(executionMode);
+                    
+                    if (isAsync) {
+                        boolean isResuming = startNodeId != null && startNodeId.equals(currentNode.getId());
+                        
+                        if (!isResuming) {
+                            String eventType = "COMMAND_RESUME_" + currentNode.getId();
+                            createEventSubscription(instance, eventType, currentNode.getId(), Map.of());
+                            
+                            step.setStatus("WAITING");
+                            step.setNotes("Suspended execution. Waiting on asynchronous command: " + commandType);
+                            step.setExitedAt(LocalDateTime.now());
+                            trace.add(step);
+                            recordTaskCompletion(ti, Map.of(), "WAITING");
+                            
+                            final WorkflowNodeDto finalNode = currentNode;
+                            final com.enterprise.atlas.workflow.entity.WorkflowInstance finalInstance = instance;
+                            final String finalInstanceId = instanceId;
+                            final String finalContextId = contextId;
+                            final WorkflowVersion finalVersion = version;
+                            final Map<String, Object> backgroundContext = new HashMap<>(context);
+                            
+                            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                                    new org.springframework.transaction.support.TransactionSynchronization() {
+                                        @Override
+                                        public void afterCommit() {
+                                            triggerAsyncCommand(finalNode, finalInstance, backgroundContext, finalInstanceId, finalContextId, finalVersion, eventType);
+                                        }
+                                    }
+                                );
+                            } else {
+                                triggerAsyncCommand(finalNode, finalInstance, backgroundContext, finalInstanceId, finalContextId, finalVersion, eventType);
+                            }
+                            
+                            suspendedNodes.add(currentNode);
                             nextNode = null;
-                            break;
+                            continue;
+                        } else {
+                            log.info("COMMAND node {} is resuming in ASYNC mode.", currentNode.getId());
+                            step.setStatus("COMPLETED");
+                            step.setNotes("Resumed and completed asynchronous command: " + commandType);
+                            
+                            Map<String, Object> commandOutput = new HashMap<>();
+                            if (ti != null && ti.getOutputData() != null) {
+                                commandOutput.putAll(ti.getOutputData());
+                            }
+                            
+                            Map<String, Object> parentObj = (Map<String, Object>) context.computeIfAbsent("commandOutputs", k -> new HashMap<String, Object>());
+                            parentObj.put(currentNode.getId(), commandOutput);
+                            
+                            Object outputMappingObj = currentNode.getData() != null ? currentNode.getData().get("outputMapping") : null;
+                            if (outputMappingObj instanceof Map) {
+                                Map<?, ?> outputMap = (Map<?, ?>) outputMappingObj;
+                                for (Map.Entry<?, ?> entry : outputMap.entrySet()) {
+                                    String outputKey = String.valueOf(entry.getKey());
+                                    String targetContextKey = String.valueOf(entry.getValue());
+                                    Object val = commandOutput.get(outputKey);
+                                    if (val != null) {
+                                        String contextKey = targetContextKey.startsWith("context.") ? targetContextKey.substring(8) : targetContextKey;
+                                        context.put(contextKey, val);
+                                    }
+                                }
+                            }
+                            
+                            recordTaskCompletion(ti, commandOutput, "COMPLETED");
                         }
                     } else {
-                        step.setStatus("COMPLETED");
-                        step.setNotes("COMMAND node has no commandType configured.");
+                        Map<String, Object> commandOutput = Map.of();
+                        if (commandType != null) {
+                            try {
+                                commandOutput = executeCommandNode(currentNode, instance, context, instanceId, contextId, version, spelCtx);
+                                step.setStatus("COMPLETED");
+                                step.setNotes("Executed command: " + commandType);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                System.out.println("COMMAND EXCEPTION: " + e.getMessage());
+                                step.setStatus("FAILED");
+                                step.setNotes("Failed to execute command: " + e.getMessage());
+                                recordTaskCompletion(ti, Map.of("error", e.getMessage()), "FAILED");
+                                nextNode = null;
+                                break;
+                            }
+                        } else {
+                            step.setStatus("COMPLETED");
+                            step.setNotes("COMMAND node has no commandType configured.");
+                        }
+                        
+                        Map<String, Object> parentObj = (Map<String, Object>) context.computeIfAbsent("commandOutputs", k -> new HashMap<String, Object>());
+                        parentObj.put(currentNode.getId(), commandOutput);
+                        
+                        recordTaskCompletion(ti, commandOutput, "COMPLETED");
                     }
-                    recordTaskCompletion(ti, commandOutput, "COMPLETED");
+                    
                     List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
                     if (!outEdges.isEmpty()) {
                         edgeTakenId = outEdges.get(0).getId();
@@ -1752,5 +1848,30 @@ public class GraphTraversalEngine {
         }
 
         return output != null ? output : Map.of();
+    }
+
+    private void triggerAsyncCommand(
+            WorkflowNodeDto node,
+            com.enterprise.atlas.workflow.entity.WorkflowInstance instance,
+            Map<String, Object> backgroundContext,
+            String instanceId,
+            String contextId,
+            WorkflowVersion version,
+            String eventType) {
+        
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(100);
+                StandardEvaluationContext backgroundSpel = new StandardEvaluationContext();
+                backgroundSpel.setVariable("context", backgroundContext);
+                
+                Map<String, Object> commandOutput = executeCommandNode(node, instance, backgroundContext, instanceId, contextId, version, backgroundSpel);
+                eventRoutingService.routeEvent(eventType, instance.getBusinessKey(), commandOutput);
+                log.info("Successfully completed async command background task for node: {} and routed resume event.", node.getId());
+            } catch (Exception ex) {
+                log.error("Error executing async command background task for node: {}", node.getId(), ex);
+                eventRoutingService.routeEvent(eventType, instance.getBusinessKey(), Map.of("error", ex.getMessage()));
+            }
+        });
     }
 }
