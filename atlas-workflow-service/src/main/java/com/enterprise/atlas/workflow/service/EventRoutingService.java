@@ -136,11 +136,15 @@ public class EventRoutingService {
                 } catch (Exception ex) {
                     log.warn("Error updating TaskInstance status during event routing: {}", ex.getMessage());
                 }
-
-                // 3. Resume execution through ExecutionService
+                // 3. Resume execution through ExecutionService or TraversalContext
                 try {
-                    executionService.resume(instance.getId(), payload);
-                    log.info("Resumed workflow instance: {} successfully.", instance.getId());
+                    boolean resumedSync = GraphTraversalEngine.trySynchronousResumption(instance.getId(), eventType, sub.getTargetNodeId(), payload);
+                    if (resumedSync) {
+                        log.info("Resumed workflow instance: {} synchronously in active traversal thread.", instance.getId());
+                    } else {
+                        executionService.resume(instance.getId(), payload);
+                        log.info("Resumed workflow instance: {} successfully.", instance.getId());
+                    }
                 } catch (Exception ex) {
                     log.error("Failed to resume instance {} on event: {}", instance.getId(), ex.getMessage(), ex);
                 }

@@ -88,13 +88,15 @@ public class GraphTraversalEngine {
         private final String suspendedNodeId;
         private final String suspendedNodeLabel;
         private final String outcomeBucketId;
+        private final Map<String, Object> runtimeGraph;
 
-        public TraversalResult(List<StepRecordDto> trace, boolean suspended, String suspendedNodeId, String suspendedNodeLabel, String outcomeBucketId) {
+        public TraversalResult(List<StepRecordDto> trace, boolean suspended, String suspendedNodeId, String suspendedNodeLabel, String outcomeBucketId, Map<String, Object> runtimeGraph) {
             this.trace = trace;
             this.suspended = suspended;
             this.suspendedNodeId = suspendedNodeId;
             this.suspendedNodeLabel = suspendedNodeLabel;
             this.outcomeBucketId = outcomeBucketId;
+            this.runtimeGraph = runtimeGraph;
         }
 
         public List<StepRecordDto> getTrace() { return trace; }
@@ -102,9 +104,10 @@ public class GraphTraversalEngine {
         public String getSuspendedNodeId() { return suspendedNodeId; }
         public String getSuspendedNodeLabel() { return suspendedNodeLabel; }
         public String getOutcomeBucketId() { return outcomeBucketId; }
+        public Map<String, Object> getRuntimeGraph() { return runtimeGraph; }
     }
 
-    private Map<String, Object> convertNodeToMap(WorkflowNodeDto node) {
+    private static Map<String, Object> convertNodeToMap(WorkflowNodeDto node) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", node.getId());
         map.put("type", node.getType());
@@ -114,7 +117,7 @@ public class GraphTraversalEngine {
         return map;
     }
 
-    private Map<String, Object> convertEdgeToMap(WorkflowEdgeDto edge) {
+    private static Map<String, Object> convertEdgeToMap(WorkflowEdgeDto edge) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", edge.getId());
         map.put("source", edge.getSource());
@@ -160,7 +163,7 @@ public class GraphTraversalEngine {
         sub.setWorkflowInstance(instance);
         sub.setFilterAttributes(filters != null ? filters : Map.of());
         sub.setStatus("ACTIVE");
-        eventSubscriptionRepository.save(sub);
+        eventSubscriptionRepository.saveAndFlush(sub);
         log.info("Created EventSubscription for instance: {}, eventType: {}, targetNode: {}", instance.getId(), eventType, targetNodeId);
     }
 
@@ -172,6 +175,96 @@ public class GraphTraversalEngine {
      * @param startNodeId optional node ID to resume execution from (if suspended)
      * @return TraversalResult detailing trace, status, and outcome/suspended node
      */
+    private static class TraversalContext {
+        String instanceId;
+        List<WorkflowNodeDto> activeFrontiers;
+        Map<String, WorkflowNodeDto> nodeMap;
+        Map<String, List<WorkflowEdgeDto>> edgesBySource;
+        List<Map<String, Object>> activeEdges;
+        Map<String, Object> context;
+        List<WorkflowNodeDto> suspendedNodes;
+    }
+
+    private static final ThreadLocal<TraversalContext> CURRENT_TRAVERSAL = new ThreadLocal<>();
+
+    public static boolean trySynchronousResumption(String instanceId, String eventType, String targetNodeId, Map<String, Object> payload) {
+        TraversalContext travCtx = CURRENT_TRAVERSAL.get();
+        if (travCtx == null || !travCtx.instanceId.equals(instanceId)) {
+            return false;
+        }
+
+        WorkflowNodeDto suspendedNode = travCtx.nodeMap.get(targetNodeId);
+        if (suspendedNode == null) return false;
+
+        if (payload != null) {
+            travCtx.context.putAll(payload);
+        }
+
+        // Remove from suspended nodes since we are resuming it synchronously in the same pass
+        if (travCtx.suspendedNodes != null) {
+            travCtx.suspendedNodes.remove(suspendedNode);
+        }
+
+        String routingValueStr = null;
+        for (String key : List.of("status", "value", "outcome")) {
+            if (payload != null && payload.containsKey(key) && payload.get(key) != null) {
+                routingValueStr = String.valueOf(payload.get(key));
+                break;
+            }
+        }
+        
+        String nextNodeId = null;
+        Object routesObj = suspendedNode.getData() != null ? suspendedNode.getData().get("routes") : null;
+        if (routesObj instanceof List) {
+            List<?> routesList = (List<?>) routesObj;
+            for (Object routeItem : routesList) {
+                if (routeItem instanceof Map) {
+                    Map<?, ?> routeMap = (Map<?, ?>) routeItem;
+                    String val = String.valueOf(routeMap.get("value"));
+                    String target = String.valueOf(routeMap.get("target"));
+                    if (val != null && val.equalsIgnoreCase(routingValueStr)) {
+                        nextNodeId = target;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (nextNodeId == null && suspendedNode.getData() != null) {
+            Object defRoute = suspendedNode.getData().get("defaultRoute");
+            if (defRoute != null) {
+                nextNodeId = String.valueOf(defRoute);
+            }
+        }
+
+        if (nextNodeId == null) {
+            List<WorkflowEdgeDto> outEdges = travCtx.edgesBySource.getOrDefault(targetNodeId, List.of());
+            if (!outEdges.isEmpty()) {
+                nextNodeId = outEdges.get(0).getTarget();
+            }
+        }
+        
+        if (nextNodeId != null && !nextNodeId.isBlank() && travCtx.nodeMap.containsKey(nextNodeId)) {
+            WorkflowNodeDto targetNode = travCtx.nodeMap.get(nextNodeId);
+            travCtx.activeFrontiers.add(targetNode);
+            
+            final String srcId = targetNodeId;
+            final String destId = nextNodeId;
+            for (List<WorkflowEdgeDto> edges : travCtx.edgesBySource.values()) {
+                for (WorkflowEdgeDto edge : edges) {
+                    if (srcId.equals(edge.getSource()) && destId.equals(edge.getTarget())) {
+                        boolean hasEdge = travCtx.activeEdges.stream().anyMatch(e -> edge.getId().equals(e.get("id")));
+                        if (!hasEdge) {
+                            travCtx.activeEdges.add(convertEdgeToMap(edge));
+                        }
+                    }
+                }
+            }
+        }
+        
+        return true;
+    }
+
     public TraversalResult traverse(WorkflowVersion version, Map<String, Object> context, String startNodeId, String instanceId) {
         WorkflowGraphDto graph = version.getDefinition();
         List<StepRecordDto> trace = new ArrayList<>();
@@ -696,7 +789,7 @@ public class GraphTraversalEngine {
                 log.warn("Activation-based loop halted: exceeded max steps ({})", MAX_STEPS);
             }
 
-            return new TraversalResult(trace, suspended, suspendedNodeId, suspendedNodeLabel, outcomeBucketId);
+            return new TraversalResult(trace, suspended, suspendedNodeId, suspendedNodeLabel, outcomeBucketId, runtimeGraph);
         }
 
         // --- STANDARD SEQUENTIAL POINTER-BASED TRAVERSAL ---
@@ -860,17 +953,37 @@ public class GraphTraversalEngine {
         }
 
         Set<String> visited = new HashSet<>();
+        List<WorkflowNodeDto> activeFrontiers = new ArrayList<>();
+        if (currentNode != null) {
+            activeFrontiers.add(currentNode);
+        }
 
-        while (currentNode != null && stepIdx < MAX_STEPS) {
-            if (visited.contains(currentNode.getId())) {
-                StepRecordDto loopRecord = buildStep(stepIdx++, currentNode, "SKIPPED",
-                        null, null, null, "Cycle detected – node already visited; halting.");
-                trace.add(loopRecord);
-                break;
+        List<WorkflowNodeDto> suspendedNodes = new ArrayList<>();
+
+        TraversalContext travCtx = new TraversalContext();
+        travCtx.instanceId = instanceId;
+        travCtx.activeFrontiers = activeFrontiers;
+        travCtx.nodeMap = nodeMap;
+        travCtx.edgesBySource = edgesBySource;
+        travCtx.activeEdges = activeEdges;
+        travCtx.context = context;
+        travCtx.suspendedNodes = suspendedNodes;
+        CURRENT_TRAVERSAL.set(travCtx);
+
+        try {
+            while (!activeFrontiers.isEmpty() && stepIdx < MAX_STEPS) {
+            currentNode = activeFrontiers.remove(0);
+
+            if (!"JOIN".equalsIgnoreCase(currentNode.getType())) {
+                if (visited.contains(currentNode.getId())) {
+                    StepRecordDto loopRecord = buildStep(stepIdx++, currentNode, "SKIPPED",
+                            null, null, null, "Cycle detected – node already visited; halting.");
+                    trace.add(loopRecord);
+                    continue;
+                }
+                visited.add(currentNode.getId());
             }
-            visited.add(currentNode.getId());
 
-            // Add node to runtime graph if not present
             final String curId = currentNode.getId();
             boolean hasNode = activeNodes.stream().anyMatch(n -> curId.equals(n.get("id")));
             if (!hasNode) {
@@ -919,6 +1032,8 @@ public class GraphTraversalEngine {
                             step.setStatus("COMPLETED");
                             step.setNotes("Executed command: " + commandType);
                         } catch (Exception e) {
+                            e.printStackTrace();
+                            System.out.println("COMMAND EXCEPTION: " + e.getMessage());
                             step.setStatus("FAILED");
                             step.setNotes("Failed to execute command: " + e.getMessage());
                             recordTaskCompletion(ti, Map.of("error", e.getMessage()), "FAILED");
@@ -954,17 +1069,17 @@ public class GraphTraversalEngine {
                     createEventSubscription(instance, eventType, currentNode.getId(), Map.of());
                     log.info("Suspended execution at WAIT_EVENT Node ID: {}, Label: {}. Registered subscription on eventType: {}", currentNode.getId(), currentNode.getLabel(), eventType);
 
-                    return new TraversalResult(trace, true, currentNode.getId(), currentNode.getLabel(), null);
+                    suspendedNodes.add(currentNode);
+                    nextNode = null;
+                    continue;
                 }
 
                 case "RULE" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
-                    // RULE node: evaluate the SpEL expression stored in data.expression
                     String expression = extractString(currentNode.getData(), "expression");
                     String ruleId = extractString(currentNode.getData(), "ruleId");
 
                     if ((expression == null || expression.isBlank()) && (ruleId != null && !ruleId.isBlank())) {
-                        // Resolve from registry
                         Optional<Rule> ruleOpt = ruleRepository.findByRuleKey(ruleId);
                         if (ruleOpt.isPresent() && ruleOpt.get().isActive()) {
                             expression = ruleOpt.get().getExpression();
@@ -972,107 +1087,109 @@ public class GraphTraversalEngine {
                         } else {
                             step.setStatus("FAILED");
                             if (ruleOpt.isEmpty()) {
-                                      step.setNotes("Rule reference '" + ruleId + "' not found in registry.");
+                                step.setNotes("Rule reference '" + ruleId + "' not found in registry.");
                             } else {
-                                      step.setNotes("Rule reference '" + ruleId + "' is inactive in registry.");
+                                step.setNotes("Rule reference '" + ruleId + "' is inactive in registry.");
                             }
                             step.setExitedAt(LocalDateTime.now());
                             trace.add(step);
                             recordTaskCompletion(ti, Map.of(), "FAILED");
-                            currentNode = null; // Halt traversal
+                            nextNode = null;
                             break;
                         }
                     }
 
-                    step.setExpression(expression);
+                    boolean ruleResult = false;
                     if (expression != null && !expression.isBlank()) {
-                        Object result = evaluateSpel(expression, spelCtx);
-                        log.info("RULE Node Evaluation - NodeID: {}, Label: {}, Expression: {}, Evaluated Result: {}", currentNode.getId(), currentNode.getLabel(), expression, result);
-                        step.setExpressionResult(result);
-                        boolean passed = Boolean.TRUE.equals(result);
-                        step.setStatus("EVALUATED");
-                        String explanation = explainEvaluation(expression, context, result);
-                        step.setNotes(explanation);
+                        try {
+                            Object resultObj = evaluateSpel(expression, spelCtx);
+                            ruleResult = Boolean.TRUE.equals(resultObj);
+                            step.setNotes("Evaluated expression: " + expression + " -> " + ruleResult);
+                        } catch (Exception e) {
+                            step.setStatus("FAILED");
+                            step.setNotes("SpEL Evaluation Error on expression '" + expression + "': " + e.getMessage());
+                            recordTaskCompletion(ti, Map.of("error", e.getMessage()), "FAILED");
+                            nextNode = null;
+                            break;
+                        }
+                    } else {
+                        step.setNotes("RULE node has no rule expression configured.");
+                    }
 
-                        // Route: first edge whose condition matches the boolean result, or fallback edge
-                        List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
-                        WorkflowEdgeDto chosen = chooseEdge(outEdges, spelCtx, passed);
+                    step.setStatus("COMPLETED");
+                    step.setExpression(expression);
+                    step.setExpressionResult(ruleResult);
+                    recordTaskCompletion(ti, Map.of("expressionResult", ruleResult), "COMPLETED");
+
+                    List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
+                    if (!outEdges.isEmpty()) {
+                        WorkflowEdgeDto chosen = chooseEdge(outEdges, spelCtx, ruleResult);
                         if (chosen != null) {
                             edgeTakenId = chosen.getId();
                             nextNode = nodeMap.get(chosen.getTarget());
                         }
-                    } else {
-                        step.setStatus("EVALUATED");
-                        step.setNotes("RULE node has no expression or rule reference – taking first outgoing edge.");
-                        List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
-                        if (!outEdges.isEmpty()) {
-                            edgeTakenId = outEdges.get(0).getId();
-                            nextNode = nodeMap.get(outEdges.get(0).getTarget());
-                        }
                     }
-                    recordTaskCompletion(ti, Map.of("expressionResult", step.getExpressionResult() != null ? step.getExpressionResult() : ""), "COMPLETED");
                 }
 
                 case "DECISION" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
-                    // DECISION node: evaluate custom expression or read a context field, then match it to an edge condition
-                    String expression = extractString(currentNode.getData(), "expression");
-                    Object fieldValue;
-                    String expressionMeta;
-                    
-                    if (expression != null && !expression.isBlank()) {
-                        fieldValue = evaluateSpel(expression, spelCtx);
-                        expressionMeta = expression;
-                        String explanation = explainEvaluation(expression, context, fieldValue);
-                        step.setNotes(explanation);
-                    } else {
-                        String fieldKey = extractString(currentNode.getData(), "decisionField");
-                        if (fieldKey != null && fieldKey.trim().isEmpty()) {
-                            fieldKey = null;
+                    String fieldKey = extractString(currentNode.getData(), "fieldKey");
+                    Object fieldValue = null;
+                    String expressionMeta = null;
+
+                    if (fieldKey != null && !fieldKey.isBlank()) {
+                        if (fieldKey.contains(".") || fieldKey.contains("[") || fieldKey.contains("'")) {
+                            try {
+                                fieldValue = evaluateSpel(fieldKey, spelCtx);
+                            } catch (Exception e) {
+                                fieldValue = context.get(fieldKey);
+                            }
+                            expressionMeta = fieldKey;
+                        } else {
+                            fieldValue = context.get(fieldKey);
+                            expressionMeta = "context['" + fieldKey + "']";
                         }
-                        fieldValue = fieldKey != null ? context.get(fieldKey) : null;
-                        expressionMeta = fieldKey != null ? "context['" + fieldKey + "']" : null;
                         step.setNotes("Decision on context field: " + fieldKey + " = '" + fieldValue + "'");
                     }
-                    
+
+                    step.setStatus("ROUTED");
                     step.setExpression(expressionMeta);
                     step.setExpressionResult(fieldValue);
-                    log.info("DECISION Node Evaluation - NodeID: {}, Label: {}, Field/Expr: {}, Resolved Value: {}", currentNode.getId(), currentNode.getLabel(), expressionMeta, fieldValue);
-                    step.setStatus("ROUTED");
+                    recordTaskCompletion(ti, Map.of("fieldValue", fieldValue != null ? fieldValue : ""), "COMPLETED");
 
                     List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
-                    WorkflowEdgeDto chosen = matchDecisionEdge(outEdges, fieldValue, spelCtx);
-                    if (chosen != null) {
-                        edgeTakenId = chosen.getId();
-                        nextNode = nodeMap.get(chosen.getTarget());
-                    } else {
-                        step.setNotes("DECISION: no matching edge for value '" + fieldValue + "' – halting.");
+                    if (!outEdges.isEmpty()) {
+                        WorkflowEdgeDto chosen = matchDecisionEdge(outEdges, fieldValue, spelCtx);
+                        if (chosen != null) {
+                            edgeTakenId = chosen.getId();
+                            nextNode = nodeMap.get(chosen.getTarget());
+                        }
                     }
-                    recordTaskCompletion(ti, Map.of("fieldValue", fieldValue != null ? fieldValue : ""), "COMPLETED");
                 }
 
                 case "BUCKET" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
                     recordTaskCompletion(ti, Map.of(), "WAITING");
 
+                    String outcomeBucketIdVal = null;
+                    if (currentNode.getData() != null) {
+                        outcomeBucketIdVal = (String) currentNode.getData().get("bucketId");
+                    }
+                    if (outcomeBucketIdVal == null) {
+                        outcomeBucketIdVal = currentNode.getId();
+                    }
+
                     step.setStatus("WAITING");
                     step.setNotes("Suspended execution. Waiting on business outcome bucket: " + step.getLabel());
                     step.setExitedAt(LocalDateTime.now());
                     trace.add(step);
 
-                    String outcomeBucketId = null;
-                    if (currentNode.getData() != null) {
-                        outcomeBucketId = (String) currentNode.getData().get("bucketId");
-                    }
-                    if (outcomeBucketId == null) {
-                        outcomeBucketId = currentNode.getId();
-                    }
+                    createBucketRevertStatusAndFormPending(instanceId, contextId, outcomeBucketIdVal, currentNode, version);
+                    createEventSubscription(instance, outcomeBucketIdVal, currentNode.getId(), Map.of());
 
-                    createBucketRevertStatusAndFormPending(instanceId, contextId, outcomeBucketId, currentNode, version);
-                    createEventSubscription(instance, outcomeBucketId, currentNode.getId(), Map.of());
-                    log.info("Suspended execution at BUCKET Node ID: {}, Label: {}. Registered subscription on bucketId: {}", currentNode.getId(), currentNode.getLabel(), outcomeBucketId);
-
-                    return new TraversalResult(trace, true, currentNode.getId(), currentNode.getLabel(), outcomeBucketId);
+                    suspendedNodes.add(currentNode);
+                    nextNode = null;
+                    continue;
                 }
 
                 case "SUB_WORKFLOW" -> {
@@ -1084,11 +1201,10 @@ public class GraphTraversalEngine {
                         step.setExitedAt(LocalDateTime.now());
                         trace.add(step);
                         recordTaskCompletion(ti, Map.of(), "FAILED");
-                        currentNode = null;
+                        nextNode = null;
                         break;
                     }
 
-                    // Map input context
                     Map<String, Object> childInput = new HashMap<>();
                     if (instance != null && instance.getBusinessKey() != null) {
                         childInput.put("businessKey", instance.getBusinessKey());
@@ -1166,7 +1282,9 @@ public class GraphTraversalEngine {
                             recordTaskCompletion(ti, Map.of("childInstanceId", childExecution.getInstanceId()), "WAITING");
                             createEventSubscription(instance, "CHILD_WORKFLOW_COMPLETED", currentNode.getId(), Map.of("childInstanceId", childExecution.getInstanceId()));
 
-                            return new TraversalResult(trace, true, currentNode.getId(), currentNode.getLabel(), null);
+                            suspendedNodes.add(currentNode);
+                            nextNode = null;
+                            continue;
                         }
                     } catch (Exception e) {
                         log.error("Failed to execute child workflow '{}': {}", childWorkflowKey, e.getMessage(), e);
@@ -1175,7 +1293,7 @@ public class GraphTraversalEngine {
                         step.setExitedAt(LocalDateTime.now());
                         trace.add(step);
                         recordTaskCompletion(ti, Map.of("error", e.getMessage()), "FAILED");
-                        currentNode = null;
+                        nextNode = null;
                         break;
                     }
                 }
@@ -1195,33 +1313,71 @@ public class GraphTraversalEngine {
 
                 case "PARALLEL" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
-                    step.setStatus("ENTERED");
-                    step.setNotes("Parallel split – fan-out recorded (logical; single-threaded traversal).");
+                    step.setStatus("COMPLETED");
                     List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
-                    if (!outEdges.isEmpty()) {
-                        edgeTakenId = outEdges.get(0).getId();
-                        nextNode = nodeMap.get(outEdges.get(0).getTarget());
+                    step.setNotes("Parallel split – fanned out to " + outEdges.size() + " branches.");
+                    
+                    for (WorkflowEdgeDto edge : outEdges) {
+                        WorkflowNodeDto targetNode = nodeMap.get(edge.getTarget());
+                        if (targetNode != null) {
+                            activeFrontiers.add(targetNode);
+                            boolean hasEdge = activeEdges.stream().anyMatch(e -> edge.getId().equals(e.get("id")));
+                            if (!hasEdge) {
+                                activeEdges.add(convertEdgeToMap(edge));
+                            }
+                        }
+                    }
+                    if (instance != null) {
+                        instance.setRuntimeGraph(runtimeGraph);
                     }
                     recordTaskCompletion(ti, Map.of(), "COMPLETED");
+                    nextNode = null;
                 }
 
                 case "JOIN" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
-                    step.setStatus("COMPLETED");
-                    step.setNotes("Join convergence recorded.");
-                    List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
-                    if (!outEdges.isEmpty()) {
-                        edgeTakenId = outEdges.get(0).getId();
-                        nextNode = nodeMap.get(outEdges.get(0).getTarget());
+                    
+                    final String joinNodeId = currentNode.getId();
+                    List<WorkflowEdgeDto> incomingEdges = graph.getEdges().stream()
+                            .filter(e -> joinNodeId.equals(e.getTarget()))
+                            .collect(Collectors.toList());
+                    
+                    log.info("JOIN NODE: Checking edges for node {}. incomingEdges={}, activeEdges={}", 
+                             joinNodeId, incomingEdges.stream().map(WorkflowEdgeDto::getId).collect(Collectors.toList()), activeEdges);
+
+                    boolean allIncomingTraversed = true;
+                    for (WorkflowEdgeDto edge : incomingEdges) {
+                        boolean hasEdge = activeEdges.stream().anyMatch(e -> edge.getId().equals(e.get("id")));
+                        log.info("JOIN NODE check: edge {} matched in activeEdges? {}", edge.getId(), hasEdge);
+                        if (!hasEdge) {
+                            allIncomingTraversed = false;
+                            break;
+                        }
                     }
-                    recordTaskCompletion(ti, Map.of(), "COMPLETED");
+
+                    if (allIncomingTraversed) {
+                        step.setStatus("COMPLETED");
+                        step.setNotes("Join convergence complete. All " + incomingEdges.size() + " incoming branches resolved.");
+                        recordTaskCompletion(ti, Map.of(), "COMPLETED");
+                        
+                        List<WorkflowEdgeDto> outEdges = edgesBySource.getOrDefault(currentNode.getId(), List.of());
+                        if (!outEdges.isEmpty()) {
+                            edgeTakenId = outEdges.get(0).getId();
+                            nextNode = nodeMap.get(outEdges.get(0).getTarget());
+                        }
+                    } else {
+                        step.setStatus("WAITING");
+                        step.setNotes("Join convergence waiting. Not all incoming branches have arrived yet.");
+                        recordTaskCompletion(ti, Map.of(), "WAITING");
+                        nextNode = null;
+                    }
                 }
 
                 case "END" -> {
                     com.enterprise.atlas.workflow.entity.TaskInstance ti = recordTaskStart(instance, currentNode, context);
                     step.setStatus("COMPLETED");
                     step.setNotes("Workflow execution reached END node.");
-                    nextNode = null; // terminal
+                    nextNode = null;
                     recordTaskCompletion(ti, Map.of(), "COMPLETED");
                     log.info("Reached END terminal node ID: {}, Label: {}", currentNode.getId(), currentNode.getLabel());
                 }
@@ -1265,14 +1421,37 @@ public class GraphTraversalEngine {
                     : 0L);
             trace.add(step);
 
-            currentNode = nextNode;
+            if (nextNode != null) {
+                activeFrontiers.add(nextNode);
+            }
+        }
+        } finally {
+            CURRENT_TRAVERSAL.remove();
         }
 
         if (stepIdx >= MAX_STEPS) {
             log.warn("Traversal halted: exceeded max steps ({}) for workflow '{}'", MAX_STEPS, version.getWorkflowDefinition().getKey());
         }
 
-        return new TraversalResult(trace, false, null, null, null);
+        if (!suspendedNodes.isEmpty()) {
+            WorkflowNodeDto prim = suspendedNodes.get(0);
+            String outcomeBucketId = null;
+            for (WorkflowNodeDto sn : suspendedNodes) {
+                if ("BUCKET".equalsIgnoreCase(sn.getType())) {
+                    if (sn.getData() != null) {
+                        outcomeBucketId = (String) sn.getData().get("bucketId");
+                    }
+                    if (outcomeBucketId == null) {
+                        outcomeBucketId = sn.getId();
+                    }
+                    prim = sn;
+                    break;
+                }
+            }
+            return new TraversalResult(trace, true, prim.getId(), prim.getLabel(), outcomeBucketId, runtimeGraph);
+        }
+
+        return new TraversalResult(trace, false, null, null, null, runtimeGraph);
     }
 
     // ---- Helpers ----

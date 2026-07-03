@@ -242,10 +242,10 @@ public class ExecutionService {
                 }
             }
 
-            // Determine outcome from result
             outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getNodeId());
             outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getLabel());
             outcomeBucketId = result.getOutcomeBucketId();
+            instance.setRuntimeGraph(result.getRuntimeGraph());
 
             // Convert trace to List<Map> for storage
             List<Map<String, Object>> traceMaps = trace.stream()
@@ -307,7 +307,7 @@ public class ExecutionService {
         executionLog.setCompletedAt(LocalDateTime.now());
         executionLog.setTotalDurationMs(System.currentTimeMillis() - startMs);
         executionRepository.save(executionLog);
-        instanceRepository.save(instance);
+        instanceRepository.saveAndFlush(instance);
 
         if ("COMPLETED".equals(instance.getStatus())) {
             triggerChildCompletionIfApplicable(instance);
@@ -453,10 +453,10 @@ public class ExecutionService {
                 }
             }
 
-            // Determine outcome from result
             outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getNodeId());
             outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getLabel());
             outcomeBucketId = result.getOutcomeBucketId();
+            instance.setRuntimeGraph(result.getRuntimeGraph());
 
             // Convert trace to List<Map> for storage
             List<Map<String, Object>> traceMaps = trace.stream()
@@ -518,7 +518,7 @@ public class ExecutionService {
         executionLog.setCompletedAt(LocalDateTime.now());
         executionLog.setTotalDurationMs(System.currentTimeMillis() - startMs);
         executionRepository.save(executionLog);
-        instanceRepository.save(instance);
+        instanceRepository.saveAndFlush(instance);
 
         if ("COMPLETED".equals(instance.getStatus())) {
             triggerChildCompletionIfApplicable(instance);

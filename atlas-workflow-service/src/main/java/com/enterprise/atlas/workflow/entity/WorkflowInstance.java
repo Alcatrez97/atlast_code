@@ -4,6 +4,7 @@ import com.enterprise.atlas.workflow.entity.converter.GenericJsonConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * Tracks the execution state and lifecycle of a running workflow instance.
@@ -102,10 +103,14 @@ public class WorkflowInstance {
     public void setCurrentNodeId(String currentNodeId) { this.currentNodeId = currentNodeId; }
 
     public Map<String, Object> getSerializedContext() { return serializedContext; }
-    public void setSerializedContext(Map<String, Object> serializedContext) { this.serializedContext = serializedContext; }
+    public void setSerializedContext(Map<String, Object> serializedContext) {
+        this.serializedContext = serializedContext != null ? new HashMap<>(serializedContext) : null;
+    }
 
     public Map<String, Object> getRuntimeGraph() { return runtimeGraph; }
-    public void setRuntimeGraph(Map<String, Object> runtimeGraph) { this.runtimeGraph = runtimeGraph; }
+    public void setRuntimeGraph(Map<String, Object> runtimeGraph) {
+        this.runtimeGraph = runtimeGraph != null ? new HashMap<>(runtimeGraph) : null;
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
