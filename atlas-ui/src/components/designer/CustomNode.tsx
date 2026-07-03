@@ -21,8 +21,7 @@ const NodeWrapper: React.FC<{
   <Card sx={{
     minWidth: 100,
     maxWidth: 140,
-    bgcolor: 'rgba(15, 23, 42, 0.65)',
-    backdropFilter: 'blur(8px)',
+    bgcolor: 'transparent',
     border: `1px solid ${selected ? '#6366f1' : borderColor}`,
     boxShadow: selected
       ? '0 0 10px rgba(99, 102, 241, 0.5)'
@@ -44,8 +43,8 @@ const NodeWrapper: React.FC<{
       width: 10,
       height: 10,
       borderRadius: '50%',
-      border: '1px solid rgba(255, 255, 255, 0.25)',
-      color: 'rgba(255, 255, 255, 0.45)',
+      border: '1px solid rgba(128, 128, 128, 0.35)',
+      color: 'text.secondary',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -57,9 +56,9 @@ const NodeWrapper: React.FC<{
       userSelect: 'none',
       transition: 'all 0.15s ease',
       '&:hover': {
-        borderColor: 'rgba(255, 255, 255, 0.6)',
-        color: 'rgba(255, 255, 255, 0.9)',
-        bgcolor: 'rgba(255, 255, 255, 0.05)'
+        borderColor: 'text.primary',
+        color: 'text.primary',
+        bgcolor: 'action.hover'
       }
     }}>
       i
