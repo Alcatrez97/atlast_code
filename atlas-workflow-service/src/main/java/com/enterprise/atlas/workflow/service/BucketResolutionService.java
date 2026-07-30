@@ -4,7 +4,9 @@ import com.enterprise.atlas.workflow.entity.BucketExecution;
 import com.enterprise.atlas.workflow.entity.CustomerForm;
 import com.enterprise.atlas.workflow.entity.RevertStatus;
 import com.enterprise.atlas.workflow.entity.WorkflowInstance;
+import com.enterprise.atlas.workflow.entity.ExecutionLog;
 import com.enterprise.atlas.workflow.repository.BucketExecutionRepository;
+import com.enterprise.atlas.workflow.repository.ExecutionRepository;
 import com.enterprise.atlas.workflow.repository.CustomerFormRepository;
 import com.enterprise.atlas.workflow.repository.RevertStatusRepository;
 import com.enterprise.atlas.workflow.repository.WorkflowInstanceRepository;
@@ -37,6 +39,12 @@ public class BucketResolutionService {
 
     @Autowired
     private WorkflowInstanceRepository workflowInstanceRepository;
+
+    @Autowired
+    private ExecutionRepository executionRepository;
+
+    @Autowired
+    private com.enterprise.atlas.workflow.repository.BucketRepository bucketRepository;
 
     @Autowired
     private EventRoutingService eventRoutingService;
@@ -90,15 +98,40 @@ public class BucketResolutionService {
             businessKey = instanceId; // fallback
         }
 
-        // Load and update form status if form exists (using businessKey or instanceId as formId)
-        String formId = businessKey;
+        // Load and update form status if form exists (using contextId or fallback to businessKey/instanceId as formId)
+        String formId = null;
+        List<ExecutionLog> previousLogs = executionRepository.findByInstanceId(instanceId);
+        if (previousLogs != null && !previousLogs.isEmpty()) {
+            formId = previousLogs.get(0).getContextId();
+        }
+        if (formId == null) {
+            formId = businessKey;
+        }
         Optional<CustomerForm> formOpt = customerFormRepository.findById(formId);
         if (formOpt.isPresent()) {
             CustomerForm form = formOpt.get();
-            String mappedStatus = bucketId + outcome; // e.g. A2Accept, A2Reject, A2Park
-            form.setFormStatus(mappedStatus);
+            
+            // Check if there are other pending buckets for the same instance
+            List<RevertStatus> allReverts = revertStatusRepository.findByWorkflowInstanceIdOrderByCreatedAtDesc(instanceId);
+            RevertStatus nextPending = null;
+            for (RevertStatus rs : allReverts) {
+                if (!rs.getBucketId().equals(bucketId) && "PENDING".equalsIgnoreCase(rs.getStatus())) {
+                    nextPending = rs;
+                    break;
+                }
+            }
+
+            if (nextPending != null) {
+                String pendingStatus = nextPending.getBucketId() + " Pending";
+                form.setFormStatus(pendingStatus);
+                log.info("Other pending bucket(s) exist. Setting CustomerForm status to '{}'", pendingStatus);
+            } else {
+                String mappedStatus = deriveFormStatus(bucketId, outcome);
+                form.setFormStatus(mappedStatus);
+                log.info("No other pending buckets. Setting CustomerForm status to '{}'", mappedStatus);
+            }
             customerFormRepository.save(form);
-            log.info("Successfully updated CustomerForm ID: {} status to '{}'", formId, mappedStatus);
+            log.info("Successfully updated CustomerForm ID: {} status to '{}'", formId, form.getFormStatus());
         } else {
             log.info("No CustomerForm found with ID: {}. Skipping status update.", formId);
         }
@@ -107,7 +140,8 @@ public class BucketResolutionService {
         Map<String, Object> additionalContext = new HashMap<>();
         additionalContext.put("lastOutcome", outcome);
         additionalContext.put("lastBucketId", bucketId);
-        additionalContext.put("form_status", bucketId + outcome);
+        additionalContext.put(bucketId + "_outcome", outcome);
+        additionalContext.put("form_status", deriveFormStatus(bucketId, outcome));
         additionalContext.put(bucketId + "_status", "RESOLVED");
         additionalContext.put(bucketId + "_resolvedBy", resolvedBy);
         additionalContext.put(bucketId + "_resolutionNotes", notes != null ? notes : "");
@@ -116,5 +150,17 @@ public class BucketResolutionService {
 
         log.info("Routing bucket resolution event: eventType={}, correlationKey={}, payload={}", bucketId, businessKey, additionalContext);
         eventRoutingService.routeEvent(bucketId, businessKey, additionalContext);
+    }
+
+    private String deriveFormStatus(String bucketId, String outcome) {
+        Optional<com.enterprise.atlas.workflow.entity.Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+        if (bucketOpt.isPresent() && bucketOpt.get().getPossibleOutcomes() != null) {
+            for (com.enterprise.atlas.common.dto.BucketOutcomeDto o : bucketOpt.get().getPossibleOutcomes()) {
+                if (o.getName().equalsIgnoreCase(outcome) && o.getFormStatus() != null && !o.getFormStatus().isBlank()) {
+                    return o.getFormStatus();
+                }
+            }
+        }
+        return bucketId + outcome; // default derivation fallback
     }
 }

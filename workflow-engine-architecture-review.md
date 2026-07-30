@@ -145,7 +145,15 @@ Workflows remain declarative for readability, but support dynamic parallel execu
 
 ---
 
-## 6. Observability & Explainability Strategy
+## 6. Dead-Path Elimination (Structural Bypassing)
+
+To ensure that downstream `JOIN` convergence nodes do not block indefinitely waiting on branches that were never taken, the workflow engine implements **Dead-Path Elimination**. 
+
+When a path diverges at a Rule/Decision node and a branch evaluates to `false`, the engine explicitly traverses the "dead" or untaken branch. It visits the subsequent nodes on that un-taken path strictly to mark them with a status of `SKIPPED`. This informs the downstream `JOIN` aggregator that it should no longer expect a token from that specific path, allowing the rest of the workflow to proceed without stalling.
+
+---
+
+## 7. Observability & Explainability Strategy
 
 To satisfy transaction-level traceability ("Why did it happen?"), we implement **Event-Sourced Step Auditing**:
 

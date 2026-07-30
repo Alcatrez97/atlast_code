@@ -21,6 +21,9 @@ public class WorkflowEdgeDto implements Serializable {
     @Schema(description = "Human-readable transition action label", example = "Yes")
     private String label;
 
+    @Schema(description = "ReactFlow edge render type (bezier, smoothstep, step, straight). Controls the visual style of the connection line on the canvas.", example = "smoothstep")
+    private String type;
+
     @Schema(description = "Conditional transition expression logic or matching rules", example = "{\"condition\": \"true\"}")
     private Map<String, Object> data = new HashMap<>(); // contains condition strings, transition rules, etc.
 
@@ -56,6 +59,14 @@ public class WorkflowEdgeDto implements Serializable {
 
     public void setLabel(String label) {
         this.label = label;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     public Map<String, Object> getData() {

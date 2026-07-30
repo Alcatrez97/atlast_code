@@ -6,5 +6,7 @@ public enum WorkflowInstanceStatus {
     WAITING,
     COMPLETED,
     FAILED,
-    TERMINATED
+    TERMINATED,
+    SKIPPED
 }
+

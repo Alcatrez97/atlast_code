@@ -42,6 +42,22 @@ public class BucketController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/key/{bucketId}/outcomes")
+    @Operation(summary = "Get possible outcomes for a bucket by key", description = "Retrieves the list of possible resolution outcomes defined for a bucket")
+    public ResponseEntity<List<com.enterprise.atlas.common.dto.BucketOutcomeDto>> getOutcomesByBucketId(@PathVariable String bucketId) {
+        return bucketService.getBucketByBusinessKey(bucketId)
+                .map(dto -> ResponseEntity.ok(dto.getPossibleOutcomes()))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/outcomes")
+    @Operation(summary = "Get possible outcomes for a bucket by DB ID", description = "Retrieves the list of possible resolution outcomes defined for a bucket using database UUID")
+    public ResponseEntity<List<com.enterprise.atlas.common.dto.BucketOutcomeDto>> getOutcomesById(@PathVariable String id) {
+        return bucketService.getBucketById(id)
+                .map(dto -> ResponseEntity.ok(dto.getPossibleOutcomes()))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping
     @Operation(summary = "Create bucket", description = "Registers a new outcome bucket with priority and SLA configuration")
     public ResponseEntity<BucketDto> createBucket(@RequestBody BucketDto dto) {

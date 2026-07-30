@@ -58,6 +58,12 @@
             <artifactId>atlas-common</artifactId>
         </dependency>
 
+        <!-- Spring Security Core for SecurityContextHolder -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+        </dependency>
+
         <!-- Databases -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -104,6 +110,31 @@
 
     <build>
         <plugins>
+            <!-- Maven Resources Plugin to copy frontend build artifacts for BFF deployment model -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-frontend-resources</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../atlas-ui/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Packaging spring boot fat jar -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>

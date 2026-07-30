@@ -3,6 +3,7 @@ package com.enterprise.atlas.common.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Schema(description = "Data Transfer Object representing a business outcome bucket (queue)")
 public class BucketDto implements Serializable {
@@ -37,6 +38,10 @@ public class BucketDto implements Serializable {
 
     @Schema(description = "Flag specifying if the bucket is active", example = "true")
     private boolean active;
+
+    @Schema(description = "Possible resolution outcomes for this bucket. Defaults to [Accept, Reject] if not configured.")
+    private List<BucketOutcomeDto> possibleOutcomes;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -77,4 +82,7 @@ public class BucketDto implements Serializable {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public List<BucketOutcomeDto> getPossibleOutcomes() { return possibleOutcomes; }
+    public void setPossibleOutcomes(List<BucketOutcomeDto> possibleOutcomes) { this.possibleOutcomes = possibleOutcomes; }
 }

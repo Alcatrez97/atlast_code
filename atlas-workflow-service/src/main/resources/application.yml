@@ -1,10 +1,11 @@
 server:
   port: 9091
 
-
 spring:
+  kafka:
+    bootstrap-servers: 172.30.111.122:9092
   application:
-    name: atlas-workflow-service
+    name: workflow-service
   profiles:
     active: h2 # Default to H2 for instant local setup
 

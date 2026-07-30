@@ -75,6 +75,7 @@ public class BucketService {
         bucket.setOwnerGroup(dto.getOwnerGroup());
         bucket.setAutoActions(dto.getAutoActions());
         bucket.setActive(true);
+        bucket.setPossibleOutcomes(dto.getPossibleOutcomes());
 
         bucket = bucketRepository.save(bucket);
         return toDto(bucket);
@@ -101,6 +102,7 @@ public class BucketService {
         bucket.setOwnerGroup(dto.getOwnerGroup());
         bucket.setAutoActions(dto.getAutoActions());
         bucket.setActive(dto.isActive());
+        bucket.setPossibleOutcomes(dto.getPossibleOutcomes());
         bucket.setUpdatedAt(LocalDateTime.now());
 
         bucket = bucketRepository.save(bucket);
@@ -163,6 +165,14 @@ public class BucketService {
         dto.setOwnerGroup(bucket.getOwnerGroup());
         dto.setAutoActions(bucket.getAutoActions());
         dto.setActive(bucket.isActive());
+        if (bucket.getPossibleOutcomes() == null || bucket.getPossibleOutcomes().isEmpty()) {
+            dto.setPossibleOutcomes(List.of(
+                new com.enterprise.atlas.common.dto.BucketOutcomeDto("Accept"),
+                new com.enterprise.atlas.common.dto.BucketOutcomeDto("Reject")
+            ));
+        } else {
+            dto.setPossibleOutcomes(bucket.getPossibleOutcomes());
+        }
         dto.setCreatedAt(bucket.getCreatedAt());
         dto.setUpdatedAt(bucket.getUpdatedAt());
         return dto;

@@ -46,6 +46,10 @@ public class Bucket {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "possible_outcomes", length = 2000)
+    @Convert(converter = com.enterprise.atlas.workflow.entity.converter.BucketOutcomeListConverter.class)
+    private java.util.List<com.enterprise.atlas.common.dto.BucketOutcomeDto> possibleOutcomes;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -102,4 +106,7 @@ public class Bucket {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public java.util.List<com.enterprise.atlas.common.dto.BucketOutcomeDto> getPossibleOutcomes() { return possibleOutcomes; }
+    public void setPossibleOutcomes(java.util.List<com.enterprise.atlas.common.dto.BucketOutcomeDto> possibleOutcomes) { this.possibleOutcomes = possibleOutcomes; }
 }

@@ -52,16 +52,20 @@ public class KafkaEventListener {
      * Listen to 'workflow-bucket-resolution' topic to resolve bucket manual tasks.
      */
     @KafkaListener(topics = "workflow-bucket-resolution", groupId = "atlas-workflow-group")
-    public void handleBucketResolution(BucketResolutionEvent event) {
+    public void handleBucketResolution(@org.springframework.messaging.handler.annotation.Payload BucketResolutionEvent event,
+                                       @org.springframework.messaging.handler.annotation.Header(value = "X-User-Id", required = false) String userId) {
         log.info("Received BucketResolutionEvent: instanceId={}, bucketId={}, outcome={}",
                 event.getInstanceId(), event.getBucketId(), event.getOutcome());
         
         try {
+            // Trust the Identity Header if provided (Identity Propagation over Kafka)
+            String resolvedBy = (userId != null && !userId.isBlank()) ? userId : event.getResolvedBy();
+            
             bucketResolutionService.resolveBucket(
                     event.getInstanceId(),
                     event.getBucketId(),
                     event.getOutcome(),
-                    event.getResolvedBy(),
+                    resolvedBy,
                     event.getResolutionNotes()
             );
             log.info("Successfully routed bucket resolution for instanceId={}", event.getInstanceId());

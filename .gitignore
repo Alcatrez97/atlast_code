@@ -28,5 +28,9 @@ dist-ssr/
 .DS_Store
 *.swp
 *.log
+*.bak
 logs/
 **/logs/
+**/bin/
+artifacts/
+

@@ -104,9 +104,12 @@ public class CustomerFormController {
 
                             if (activePending != null) {
                                 String bucketId = activePending.getBucketId();
-                                String outcome = newStatus;
-                                if (newStatus.startsWith(bucketId)) {
-                                    outcome = newStatus.substring(bucketId.length());
+                                String outcome = body.get("outcome");
+                                if (outcome == null || outcome.isBlank()) {
+                                    outcome = newStatus;
+                                    if (newStatus.startsWith(bucketId)) {
+                                        outcome = newStatus.substring(bucketId.length());
+                                    }
                                 }
                                 bucketResolutionService.resolveBucket(
                                         instanceId,

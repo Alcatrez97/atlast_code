@@ -38,6 +38,9 @@ public class WorkflowService {
     @Autowired
     private com.enterprise.atlas.workflow.repository.WorkflowInstanceRepository workflowInstanceRepository;
 
+    @Autowired
+    private com.enterprise.atlas.workflow.repository.BucketRepository bucketRepository;
+
     public WorkflowDefinitionDto createWorkflowDefinition(WorkflowDefinitionDto dto) {
         if (definitionRepository.existsByKey(dto.getKey())) {
             throw new IllegalArgumentException("Workflow key '" + dto.getKey() + "' already exists.");
@@ -137,6 +140,7 @@ public class WorkflowService {
                 edgeClone.setSource(edge.getSource());
                 edgeClone.setTarget(edge.getTarget());
                 edgeClone.setLabel(edge.getLabel());
+                edgeClone.setType(edge.getType());
                 if (edge.getData() != null) {
                     edgeClone.setData(new HashMap<>(edge.getData()));
                 }
@@ -328,6 +332,38 @@ public class WorkflowService {
                     Optional<EventDefinition> eventOpt = eventDefinitionRepository.findByEventKey(eventKey);
                     if (eventOpt.isEmpty()) {
                         throw new IllegalArgumentException("Emit event command node '" + node.getId() + "' references unregistered event key: '" + eventKey + "'");
+                    }
+                }
+            } else if ("BUCKET".equals(type)) {
+                List<WorkflowEdgeDto> outEdges = graph.getEdges().stream()
+                        .filter(e -> node.getId().equals(e.getSource()))
+                        .collect(Collectors.toList());
+                if (outEdges.isEmpty()) {
+                    throw new IllegalArgumentException("Bucket node '" + node.getId() + "' (" + node.getLabel() + ") has no outgoing edges.");
+                }
+
+                String bucketId = node.getData() != null ? (String) node.getData().get("bucketId") : null;
+                if (bucketId == null || bucketId.isBlank()) {
+                    bucketId = node.getId();
+                }
+
+                List<String> validOutcomes = new java.util.ArrayList<>(List.of("Accept", "Reject"));
+                Optional<com.enterprise.atlas.workflow.entity.Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+                if (bucketOpt.isPresent() && bucketOpt.get().getPossibleOutcomes() != null && !bucketOpt.get().getPossibleOutcomes().isEmpty()) {
+                    validOutcomes.clear();
+                    for (com.enterprise.atlas.common.dto.BucketOutcomeDto o : bucketOpt.get().getPossibleOutcomes()) {
+                        validOutcomes.add(o.getName().toLowerCase());
+                    }
+                } else {
+                    validOutcomes = validOutcomes.stream().map(String::toLowerCase).collect(Collectors.toList());
+                }
+
+                for (WorkflowEdgeDto edge : outEdges) {
+                    String outcomeType = edge.getData() != null ? (String) edge.getData().get("outcomeType") : null;
+                    if (outcomeType != null && !outcomeType.isBlank()) {
+                        if (!validOutcomes.contains(outcomeType.toLowerCase())) {
+                            throw new IllegalArgumentException("Outgoing edge '" + edge.getId() + "' from bucket node '" + node.getId() + "' (" + node.getLabel() + ") references unregistered outcome: '" + outcomeType + "'");
+                        }
                     }
                 }
             }

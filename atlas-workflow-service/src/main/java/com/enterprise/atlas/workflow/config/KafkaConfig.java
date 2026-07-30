@@ -1,5 +1,6 @@
 package com.enterprise.atlas.workflow.config;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -30,6 +31,15 @@ public class KafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
+
+    // --- Kafka Admin Configuration ---
+    // This tells Spring Boot where to connect to automatically create your topics
+    @Bean
+    public KafkaAdmin kafkaAdmin() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        return new KafkaAdmin(configs);
+    }
 
     // --- Topic Declarations ---
     @Bean
@@ -94,27 +104,26 @@ public class KafkaConfig {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, "atlas-workflow-group");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        
+
         JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>();
         jsonDeserializer.addTrustedPackages("com.enterprise.atlas.common.dto");
 
         return new DefaultKafkaConsumerFactory<>(
                 config,
                 new StringDeserializer(),
-                new ErrorHandlingDeserializer<>(jsonDeserializer)
-        );
+                new ErrorHandlingDeserializer<>(jsonDeserializer));
     }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ConsumerFactory<String, Object> consumerFactory,
             KafkaTemplate<String, Object> kafkaTemplate) {
-        
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
+
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
 
-        // Configure Dead Letter Queue (DLQ) Recovery with 3 retry attempts (backoff: 1s)
+        // Configure Dead Letter Queue (DLQ) Recovery with 3 retry attempts (backoff:
+        // 1s)
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
         factory.setCommonErrorHandler(errorHandler);

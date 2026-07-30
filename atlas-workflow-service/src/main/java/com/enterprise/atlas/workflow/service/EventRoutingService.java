@@ -130,7 +130,7 @@ public class EventRoutingService {
                         targetTask.setStatus("COMPLETED");
                         targetTask.setOutputData(payload);
                         targetTask.setCompletedAt(LocalDateTime.now());
-                        taskInstanceRepository.save(targetTask);
+                        taskInstanceRepository.saveAndFlush(targetTask);
                         log.info("Marked TaskInstance {} as COMPLETED", targetTask.getId());
                     }
                 } catch (Exception ex) {

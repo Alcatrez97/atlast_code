@@ -214,11 +214,12 @@ public class ExecutionService {
         String outcomeNodeId = null;
         String outcomeNodeLabel = null;
         String outcomeBucketId = null;
+        List<StepRecordDto> trace = null;
 
         try {
             // Run the traversal against the lazy context map
             GraphTraversalEngine.TraversalResult result = traversalEngine.traverse(version, lazyContext, null, instanceId);
-            List<StepRecordDto> trace = result.getTrace();
+            trace = result.getTrace();
 
             // Enrich BUCKET steps with real-time bucket registry metadata
             for (StepRecordDto step : trace) {
@@ -313,13 +314,9 @@ public class ExecutionService {
             triggerChildCompletionIfApplicable(instance);
         }
 
-        // Auto-create BucketExecution record if execution suspended at a BUCKET
-        if ("WAITING".equals(executionLog.getStatus()) && executionLog.getOutcomeBucketId() != null) {
-            try {
-                bucketExecutionService.createFromExecution(executionLog, executionLog.getOutcomeBucketId());
-            } catch (Exception ex) {
-                log.warn("Failed to create BucketExecution for execution {}: {}", executionLog.getId(), ex.getMessage());
-            }
+        // Auto-create BucketExecution record(s) if execution suspended at a BUCKET
+        if ("WAITING".equals(executionLog.getStatus())) {
+            createBucketExecutionsForWaitingSteps(executionLog, trace, version);
         }
 
         return toDto(executionLog);
@@ -386,7 +383,14 @@ public class ExecutionService {
             }
         }
 
-        String contextId = UUID.randomUUID().toString();
+        String contextId = null;
+        List<ExecutionLog> previousLogs = executionRepository.findByInstanceId(instanceId);
+        if (previousLogs != null && !previousLogs.isEmpty()) {
+            contextId = previousLogs.get(0).getContextId();
+        }
+        if (contextId == null || contextId.isBlank()) {
+            contextId = UUID.randomUUID().toString();
+        }
 
         // Load serialized context
         Map<String, Object> context = instance.getSerializedContext() != null
@@ -425,11 +429,12 @@ public class ExecutionService {
         String outcomeNodeId = null;
         String outcomeNodeLabel = null;
         String outcomeBucketId = null;
+        List<StepRecordDto> trace = null;
 
         try {
             // Traverse starting from the suspended node
             GraphTraversalEngine.TraversalResult result = traversalEngine.traverse(version, lazyContext, instance.getCurrentNodeId(), instanceId);
-            List<StepRecordDto> trace = result.getTrace();
+            trace = result.getTrace();
 
             // Enrich BUCKET steps with real-time bucket registry metadata
             for (StepRecordDto step : trace) {
@@ -524,13 +529,9 @@ public class ExecutionService {
             triggerChildCompletionIfApplicable(instance);
         }
 
-        // Auto-create BucketExecution record if execution suspended again at a BUCKET
-        if ("WAITING".equals(executionLog.getStatus()) && executionLog.getOutcomeBucketId() != null) {
-            try {
-                bucketExecutionService.createFromExecution(executionLog, executionLog.getOutcomeBucketId());
-            } catch (Exception ex) {
-                log.warn("Failed to create BucketExecution for execution {}: {}", executionLog.getId(), ex.getMessage());
-            }
+        // Auto-create BucketExecution record(s) if execution suspended again at a BUCKET
+        if ("WAITING".equals(executionLog.getStatus())) {
+            createBucketExecutionsForWaitingSteps(executionLog, trace, version);
         }
 
         return toDto(executionLog);
@@ -695,5 +696,35 @@ public class ExecutionService {
         }
 
         return dto;
+    }
+
+    private void createBucketExecutionsForWaitingSteps(ExecutionLog executionLog, List<StepRecordDto> trace, WorkflowVersion version) {
+        if (trace == null || version == null || version.getDefinition() == null) return;
+        for (StepRecordDto step : trace) {
+            if ("BUCKET".equalsIgnoreCase(step.getNodeType()) && "WAITING".equalsIgnoreCase(step.getStatus())) {
+                WorkflowNodeDto node = version.getDefinition().getNodes().stream()
+                        .filter(n -> n.getId().equals(step.getNodeId()))
+                        .findFirst()
+                        .orElse(null);
+                if (node != null && node.getData() != null) {
+                    String bucketId = (String) node.getData().get("bucketId");
+                    if (bucketId == null) {
+                        bucketId = node.getId();
+                    }
+                    try {
+                        String currentBucketId = bucketId;
+                        boolean exists = bucketExecutionRepository.findByWorkflowInstanceId(executionLog.getInstanceId()).stream()
+                                .anyMatch(b -> currentBucketId.equals(b.getBucketId()) && 
+                                        ("PENDING".equalsIgnoreCase(b.getStatus()) || "IN_REVIEW".equalsIgnoreCase(b.getStatus())));
+                        if (!exists) {
+                            bucketExecutionService.createFromExecution(executionLog, bucketId);
+                            log.info("Created BucketExecution for suspended bucket {} in instance {}", bucketId, executionLog.getInstanceId());
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Failed to create BucketExecution for bucket {} in execution {}: {}", bucketId, executionLog.getId(), ex.getMessage());
+                    }
+                }
+            }
+        }
     }
 }
