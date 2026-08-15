@@ -83,12 +83,9 @@ export const EventForm = ({ event, onClose, onRefresh, onShowNotification }) => 
         }
     };
     const accentColor = '#8b5cf6'; // Violet theme color
-    return (<Container maxWidth="md" sx={{ py: 2 }}>
+    return (<Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 2 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-        <IconButton onClick={onClose} sx={{ color: accentColor, border: `1px solid rgba(139,92,246,0.2)` }}>
-          <ArrowBackIcon />
-        </IconButton>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
             {event ? 'modify event definition' : 'register new event'}

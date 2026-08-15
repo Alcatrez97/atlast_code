@@ -16,7 +16,20 @@ const getOutcomeColor = (name) => {
         return 'warning';
     return 'primary';
 };
+import { Checkbox, ListItemText } from '@mui/material';
+import { useWorkflowStore } from '../store/workflowStore.js';
+
+const CIRCLE_OPTIONS = [
+  { id: 101, label: '101 - MH (Maharashtra)', badge: 'MH', color: '#00A05A' },
+  { id: 102, label: '102 - DL (Delhi)', badge: 'DL', color: '#0CADEF' },
+  { id: 103, label: '103 - KA (Karnataka)', badge: 'KA', color: '#8b5cf6' },
+  { id: 104, label: '104 - TN (Tamil Nadu)', badge: 'TN', color: '#ff6d00' },
+  { id: 105, label: '105 - DL_NCR (Delhi NCR)', badge: 'NCR', color: '#d97706' },
+  { id: 106, label: '106 - ROWB (West Bengal)', badge: 'WB', color: '#64748b' },
+];
+
 export const CustomerFormsPage = ({ onShowNotification }) => {
+    const { selectedCircleIds } = useWorkflowStore();
     const [forms, setForms] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -27,7 +40,15 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
     const [totalElements, setTotalElements] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [selectedStatus, setSelectedStatus] = useState('ALL');
-    const fetchForms = async (targetPage = page, targetSize = size, statusFilter = selectedStatus, searchTerm = search) => {
+    const [selectedCircles, setSelectedCircles] = useState(selectedCircleIds || []);
+
+    useEffect(() => {
+        if (selectedCircleIds) {
+            setSelectedCircles(selectedCircleIds);
+        }
+    }, [selectedCircleIds]);
+
+    const fetchForms = async (targetPage = page, targetSize = size, statusFilter = selectedStatus, searchTerm = search, circles = selectedCircles) => {
         setLoading(true);
         try {
             const params = new URLSearchParams();
@@ -35,6 +56,9 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
             params.append('size', String(targetSize));
             if (statusFilter && statusFilter !== 'ALL') {
                 params.append('status', statusFilter);
+            }
+            if (circles && circles.length > 0) {
+                params.append('circleId', circles.join(','));
             }
             if (searchTerm && searchTerm.trim() !== '') {
                 params.append('search', searchTerm.trim());
@@ -69,8 +93,8 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
             .catch(() => { });
     }, []);
     useEffect(() => {
-        fetchForms(page, size, selectedStatus, search);
-    }, [page, size, selectedStatus, search]);
+        fetchForms(page, size, selectedStatus, search, selectedCircles);
+    }, [page, size, selectedStatus, search, selectedCircles]);
     const handleUpdateStatus = async (id, currentStatus, outcomeName) => {
         // Expect status like "A2 Pending", parse out "A2"
         const parts = currentStatus.split(' ');
@@ -129,7 +153,7 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
     };
     const accentColor = '#ec4899'; // Premium pink/magenta for simulator page
     return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
-      <Container maxWidth="lg">
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -177,7 +201,7 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
         }}>
           <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             {/* Search Input */}
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 5 }}>
               <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', letterSpacing: '0.5px', display: 'block', mb: 1 }}>
                 SEARCH CUSTOMER DOCUMENT
               </Typography>
@@ -191,6 +215,45 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
             setPage(0);
         }} sx={{ ml: 1, flex: 1, color: 'text.primary', fontSize: '14px' }}/>
               </Box>
+            </Grid>
+
+            {/* Circle ID Filter Dropdown */}
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', letterSpacing: '0.5px', display: 'block', mb: 1 }}>
+                CIRCLE ID PARTITION
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  multiple
+                  value={selectedCircles}
+                  onChange={(e) => {
+                    const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
+                    setSelectedCircles(val);
+                    setPage(0);
+                  }}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    if (!selected || selected.length === 0) return 'All Circles';
+                    return selected.map(id => {
+                      const opt = CIRCLE_OPTIONS.find(c => c.id === Number(id));
+                      return opt ? opt.badge : id;
+                    }).join(', ');
+                  }}
+                  sx={{
+                    bgcolor: 'background.default',
+                    borderRadius: 2,
+                    fontSize: '14px',
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }
+                  }}
+                >
+                  {CIRCLE_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: '14px' }}>
+                      <Checkbox checked={selectedCircles.indexOf(opt.id) > -1} size="small" />
+                      <ListItemText primary={opt.label} primaryTypographyProps={{ fontSize: '14px' }} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             {/* Status Filter Dropdown */}

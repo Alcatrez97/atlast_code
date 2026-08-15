@@ -194,10 +194,10 @@ export const RuleHelpPage = ({ onShowNotification }) => {
     ];
     const accentColor = '#8b5cf6';
     return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
-      <Container maxWidth="xl">
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Title bar */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-          <IconButton onClick={() => goBack()} sx={{ color: accentColor, border: `1px solid rgba(139,92,246,0.2)` }}>
+          <IconButton onClick={() => goBack()} sx={{ color: '#2F3043', border: '1px solid #2f304344' }}>
             <ArrowBackIcon />
           </IconButton>
           <Box>

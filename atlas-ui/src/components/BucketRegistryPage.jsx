@@ -10,220 +10,227 @@ import GroupIcon from '@mui/icons-material/Group';
 import { useWorkflowStore } from '../store/workflowStore.js';
 import { BucketFormDrawer } from './BucketFormDrawer';
 export const BucketRegistryPage = ({ onShowNotification }) => {
-    const { goBack, setView } = useWorkflowStore();
-    const [buckets, setBuckets] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState('');
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [selectedBucket, setSelectedBucket] = useState(null);
-    const fetchBuckets = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch('/api/buckets');
-            if (!res.ok)
-                throw new Error('Failed to fetch buckets');
-            const data = await res.json();
-            setBuckets(data);
-        }
-        catch (err) {
-            onShowNotification(err.message, 'error');
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    useEffect(() => {
-        fetchBuckets();
-    }, []);
-    const handleDelete = async (id, e) => {
-        e.stopPropagation();
-        if (!window.confirm('Are you sure you want to delete this bucket entry? This might break workflows referencing this bucketId.'))
-            return;
-        try {
-            const res = await fetch(`/api/buckets/${id}`, { method: 'DELETE' });
-            if (!res.ok)
-                throw new Error('Failed to delete bucket');
-            onShowNotification('Bucket deleted from registry', 'success');
-            await fetchBuckets();
-        }
-        catch (err) {
-            onShowNotification(err.message, 'error');
-        }
-    };
-    const handleEdit = (bucket) => {
-        setSelectedBucket(bucket);
-        setDrawerOpen(true);
-    };
-    const handleCreateNew = () => {
-        setSelectedBucket(null);
-        setDrawerOpen(true);
-    };
-    const getPriorityColor = (p) => {
-        switch (p?.toUpperCase()) {
-            case 'CRITICAL': return { bg: 'rgba(239, 68, 68, 0.15)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' };
-            case 'HIGH': return { bg: 'rgba(249, 115, 22, 0.15)', text: '#f97316', border: 'rgba(249, 115, 22, 0.3)' };
-            case 'MEDIUM': return { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' };
-            case 'LOW': return { bg: 'rgba(34, 197, 94, 0.15)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' };
-            default: return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
-        }
-    };
-    const filteredBuckets = buckets.filter(b => b.name.toLowerCase().includes(search.toLowerCase()) ||
-        b.bucketId.toLowerCase().includes(search.toLowerCase()) ||
-        (b.category && b.category.toLowerCase().includes(search.toLowerCase())) ||
-        (b.ownerGroup && b.ownerGroup.toLowerCase().includes(search.toLowerCase())));
-    return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
-      <Container maxWidth="lg">
-        {/* Title bar */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton onClick={() => goBack()} sx={{ color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}>
-              <ArrowBackIcon />
-            </IconButton>
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
-                Outcome Bucket Registry
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Configure operational endpoints, SLAs, and assignment owners for business outcomes.
-              </Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="outlined" onClick={() => setView('bucketHelp')} sx={{
-            borderColor: '#a855f7',
-            color: '#a855f7',
-            fontWeight: 700,
-            '&:hover': {
-                borderColor: '#a855f7',
-                bgcolor: 'rgba(168,85,247,0.08)',
-            }
-        }}>
-              Outcome Bucket Guide
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
-            background: 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)',
-            boxShadow: '0 4px 14px rgba(168,85,247,0.3)',
-            fontWeight: 700,
-            '&:hover': { background: '#7e22ce' }
-        }}>
-              Register Bucket
-            </Button>
+  const { goBack, setView, showConfirm } = useWorkflowStore();
+  const [buckets, setBuckets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedBucket, setSelectedBucket] = useState(null);
+  const fetchBuckets = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/buckets');
+      if (!res.ok)
+        throw new Error('Failed to fetch buckets');
+      const data = await res.json();
+      setBuckets(data);
+    }
+    catch (err) {
+      onShowNotification(err.message, 'error');
+    }
+    finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchBuckets();
+  }, []);
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    const isConfirmed = await showConfirm({
+      title: 'Delete Bucket Entry',
+      message: 'Are you sure you want to delete this bucket entry? Workflows referencing this bucketId may fail.',
+      confirmText: 'Delete Bucket',
+      cancelText: 'Cancel',
+      severity: 'error'
+    });
+    if (!isConfirmed)
+      return;
+    try {
+      const res = await fetch(`/api/buckets/${id}`, { method: 'DELETE' });
+      if (!res.ok)
+        throw new Error('Failed to delete bucket');
+      onShowNotification('Bucket deleted from registry', 'success');
+      await fetchBuckets();
+    }
+    catch (err) {
+      onShowNotification(err.message, 'error');
+    }
+  };
+  const handleEdit = (bucket) => {
+    setSelectedBucket(bucket);
+    setDrawerOpen(true);
+  };
+  const handleCreateNew = () => {
+    setSelectedBucket(null);
+    setDrawerOpen(true);
+  };
+  const getPriorityColor = (p) => {
+    switch (p?.toUpperCase()) {
+      case 'CRITICAL': return { bg: 'rgba(239, 68, 68, 0.15)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' };
+      case 'HIGH': return { bg: 'rgba(249, 115, 22, 0.15)', text: '#f97316', border: 'rgba(249, 115, 22, 0.3)' };
+      case 'MEDIUM': return { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' };
+      case 'LOW': return { bg: 'rgba(34, 197, 94, 0.15)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' };
+      default: return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
+    }
+  };
+  const filteredBuckets = buckets.filter(b => b.name.toLowerCase().includes(search.toLowerCase()) ||
+    b.bucketId.toLowerCase().includes(search.toLowerCase()) ||
+    (b.category && b.category.toLowerCase().includes(search.toLowerCase())) ||
+    (b.ownerGroup && b.ownerGroup.toLowerCase().includes(search.toLowerCase())));
+  return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
+    <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+      {/* Title bar */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton onClick={() => goBack()} sx={{ color: '#2F3043', border: '1px solid #2f304344' }}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
+              Outcome Bucket Registry
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Configure operational endpoints, SLAs, and assignment owners for business outcomes.
+            </Typography>
           </Box>
         </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button variant="outlined" onClick={() => setView('bucketHelp')} sx={{
+            borderColor: '#686b9744',
+            color: '#2F3043',
+            fontWeight: 700,
+            '&:hover': {
+              borderColor: '#686b9744',
+              bgcolor: 'rgba(104, 107, 151, 0.12)',
+            }
+          }}>
+            Outcome Bucket Guide
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
+            background: 'linear-gradient(135deg, #686b97ff 0%, #2F3043 100%)',
+            boxShadow: '0 1px 1px #686b97ff',
+            fontWeight: 700,
+            '&:hover': { background: 'linear-gradient(135deg,  #686b97ff 100%)' }
+          }}>
+            Register Bucket
+          </Button>
+        </Box>
+      </Box>
 
-        {/* Search bar */}
-        <Paper sx={{
-            p: '4px 12px', display: 'flex', alignItems: 'center', mb: 4,
-            bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2
-        }}>
-          <SearchIcon sx={{ color: 'text.secondary', mr: 1 }}/>
-          <InputBase placeholder="Search buckets by ID, Name, Owner, or Category..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ ml: 1, flex: 1, color: 'text.primary', fontSize: '14px' }}/>
-        </Paper>
+      {/* Search bar */}
+      <Paper sx={{
+        p: '4px 12px', display: 'flex', alignItems: 'center', mb: 4,
+        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2
+      }}>
+        <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+        <InputBase placeholder="Search buckets by ID, Name, Owner, or Category..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ ml: 1, flex: 1, color: 'text.primary', fontSize: '14px' }} />
+      </Paper>
 
-        {/* Loading / Content */}
-        {loading && buckets.length === 0 ? (<Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
-            <CircularProgress color="secondary"/>
-          </Box>) : filteredBuckets.length === 0 ? (<Box sx={{
-                p: 8, border: '1px dashed', borderColor: 'divider', borderRadius: 2,
-                textAlign: 'center', bgcolor: 'background.paper'
+      {/* Loading / Content */}
+      {loading && buckets.length === 0 ? (<Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
+        <CircularProgress color="secondary" />
+      </Box>) : filteredBuckets.length === 0 ? (<Box sx={{
+        p: 8, border: '1px dashed', borderColor: 'divider', borderRadius: 2,
+        textAlign: 'center', bgcolor: 'background.paper'
+      }}>
+        <Typography variant="body1" color="text.secondary">
+          No outcome buckets found. Click "Register Bucket" to create one.
+        </Typography>
+      </Box>) : (<Grid container spacing={3}>
+        {filteredBuckets.map((b) => {
+          const colors = getPriorityColor(b.priority);
+          return (<Grid size={{ xs: 12, sm: 6, md: 4 }} key={b.id}>
+            <Card sx={{
+              height: '100%', display: 'flex', flexDirection: 'column',
+              bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+              transition: 'transform 0.2s, border-color 0.2s',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                borderColor: colors.border
+              }
             }}>
-            <Typography variant="body1" color="text.secondary">
-              No outcome buckets found. Click "Register Bucket" to create one.
-            </Typography>
-          </Box>) : (<Grid container spacing={3}>
-            {filteredBuckets.map((b) => {
-                const colors = getPriorityColor(b.priority);
-                return (<Grid size={{ xs: 12, sm: 6, md: 4 }} key={b.id}>
-                  <Card sx={{
-                        height: '100%', display: 'flex', flexDirection: 'column',
-                        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
-                        transition: 'transform 0.2s, border-color 0.2s',
-                        '&:hover': {
-                            transform: 'translateY(-2px)',
-                            borderColor: colors.border
-                        }
+              <CardContent sx={{ flexGrow: 1, p: 2.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box>
+                    <Typography variant="caption" sx={{
+                      fontFamily: 'monospace', color: '#a855f7', fontWeight: 800,
+                      letterSpacing: '1px', display: 'block', mb: 0.5
                     }}>
-                    <CardContent sx={{ flexGrow: 1, p: 2.5 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Box>
-                          <Typography variant="caption" sx={{
-                        fontFamily: 'monospace', color: '#a855f7', fontWeight: 800,
-                        letterSpacing: '1px', display: 'block', mb: 0.5
-                    }}>
-                            {b.bucketId}
-                          </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                            {b.name}
-                          </Typography>
-                        </Box>
-                        {/* Priority Badge */}
-                        <Chip label={b.priority} size="small" sx={{
-                        height: 20, fontSize: '9px', fontWeight: 800,
-                        bgcolor: colors.bg, color: colors.text,
-                        border: `1px solid ${colors.border}`
-                    }}/>
-                      </Box>
+                      {b.bucketId}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                      {b.name}
+                    </Typography>
+                  </Box>
+                  {/* Priority Badge */}
+                  <Chip label={b.priority} size="small" sx={{
+                    height: 20, fontSize: '9px', fontWeight: 800,
+                    bgcolor: colors.bg, color: colors.text,
+                    border: `1px solid ${colors.border}`
+                  }} />
+                </Box>
 
-                      <Typography variant="body2" color="text.secondary" sx={{
-                        minHeight: 40, mb: 2, display: '-webkit-box',
-                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                    }}>
-                        {b.description || 'No description provided.'}
-                      </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{
+                  minHeight: 40, mb: 2, display: '-webkit-box',
+                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                }}>
+                  {b.description || 'No description provided.'}
+                </Typography>
 
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                        {b.category && (<Chip label={b.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '8px', borderColor: 'rgba(255,255,255,0.08)' }}/>)}
-                        {!b.active && (<Chip label="SUSPENDED" size="small" color="error" sx={{ height: 18, fontSize: '8px', fontWeight: 700 }}/>)}
-                      </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+                  {b.category && (<Chip label={b.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '8px', borderColor: 'rgba(255,255,255,0.08)' }} />)}
+                  {!b.active && (<Chip label="SUSPENDED" size="small" color="error" sx={{ height: 18, fontSize: '8px', fontWeight: 700 }} />)}
+                </Box>
 
-                      {/* Outcomes chips */}
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2, alignItems: 'center' }}>
-                        <Typography sx={{ fontSize: '10px', color: 'text.secondary', mr: 0.5 }}>Outcomes:</Typography>
-                        {(b.possibleOutcomes && b.possibleOutcomes.length > 0 ? b.possibleOutcomes : [{ name: 'Accept' }, { name: 'Reject' }]).map((o) => {
-                        const n = o.name.toLowerCase();
-                        let color = 'default';
-                        if (n.includes('accept') || n.includes('approve') || n.includes('success'))
-                            color = 'success';
-                        else if (n.includes('reject') || n.includes('deny') || n.includes('fail'))
-                            color = 'error';
-                        else if (n.includes('park') || n.includes('hold') || n.includes('defer'))
-                            color = 'warning';
-                        return (<Chip key={o.name} label={o.name} size="small" color={color} variant="outlined" sx={{ height: 16, fontSize: '7.5px', fontWeight: 700, px: 0.5 }}/>);
-                    })}
-                      </Box>
+                {/* Outcomes chips */}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2, alignItems: 'center' }}>
+                  <Typography sx={{ fontSize: '10px', color: 'text.secondary', mr: 0.5 }}>Outcomes:</Typography>
+                  {(b.possibleOutcomes && b.possibleOutcomes.length > 0 ? b.possibleOutcomes : [{ name: 'Accept' }, { name: 'Reject' }]).map((o) => {
+                    const n = o.name.toLowerCase();
+                    let color = 'default';
+                    if (n.includes('accept') || n.includes('approve') || n.includes('success'))
+                      color = 'success';
+                    else if (n.includes('reject') || n.includes('deny') || n.includes('fail'))
+                      color = 'error';
+                    else if (n.includes('park') || n.includes('hold') || n.includes('defer'))
+                      color = 'warning';
+                    return (<Chip key={o.name} label={o.name} size="small" color={color} variant="outlined" sx={{ height: 16, fontSize: '7.5px', fontWeight: 700, px: 0.5 }} />);
+                  })}
+                </Box>
 
-                      <Divider sx={{ my: 1.5, borderColor: 'rgba(255,255,255,0.06)' }}/>
+                <Divider sx={{ my: 1.5, borderColor: 'rgba(255,255,255,0.06)' }} />
 
-                      <Grid container spacing={1}>
-                        <Grid size={{ xs: 6 }} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <TimerIcon sx={{ color: 'text.secondary', fontSize: 16 }}/>
-                          <Typography variant="caption" color="text.secondary">
-                            SLA: <b>{b.slaHours ? `${b.slaHours}h` : 'N/A'}</b>
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 6 }} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <GroupIcon sx={{ color: 'text.secondary', fontSize: 16 }}/>
-                          <Typography variant="caption" color="text.secondary" noWrap>
-                            Owner: <b>{b.ownerGroup || 'None'}</b>
-                          </Typography>
-                        </Grid>
-                      </Grid>
-                    </CardContent>
+                <Grid container spacing={1}>
+                  <Grid size={{ xs: 6 }} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TimerIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                    <Typography variant="caption" color="text.secondary">
+                      SLA: <b>{b.slaHours ? `${b.slaHours}h` : 'N/A'}</b>
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <GroupIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      Owner: <b>{b.ownerGroup || 'None'}</b>
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </CardContent>
 
-                    <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2, pt: 0 }}>
-                      <IconButton size="small" onClick={() => handleEdit(b)} sx={{ color: 'text.secondary', '&:hover': { color: '#a855f7' } }}>
-                        <EditIcon sx={{ fontSize: 18 }}/>
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={(e) => handleDelete(b.id, e)}>
-                        <DeleteIcon sx={{ fontSize: 18 }}/>
-                      </IconButton>
-                    </CardActions>
-                  </Card>
-                </Grid>);
-            })}
-          </Grid>)}
+              <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2, pt: 0 }}>
+                <IconButton size="small" onClick={() => handleEdit(b)} sx={{ color: 'text.secondary', '&:hover': { color: '#a855f7' } }}>
+                  <EditIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <IconButton size="small" color="error" onClick={(e) => handleDelete(b.id, e)}>
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </CardActions>
+            </Card>
+          </Grid>);
+        })}
+      </Grid>)}
 
-        <BucketFormDrawer open={drawerOpen} bucket={selectedBucket} onClose={() => setDrawerOpen(false)} onRefresh={fetchBuckets} onShowNotification={onShowNotification}/>
-      </Container>
-    </Box>);
+      <BucketFormDrawer open={drawerOpen} bucket={selectedBucket} onClose={() => setDrawerOpen(false)} onRefresh={fetchBuckets} onShowNotification={onShowNotification} />
+    </Container>
+  </Box>);
 };

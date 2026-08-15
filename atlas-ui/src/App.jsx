@@ -21,10 +21,11 @@ import { WorkflowInstancesPage } from './components/WorkflowInstancesPage';
 import { CustomerFormsPage } from './components/CustomerFormsPage';
 import { ExecutionHistory } from './components/ExecutionHistory';
 import { EventRegistryPage } from './components/EventRegistryPage';
+import { ConfirmModal } from './components/ConfirmModal';
 // Icon imports for left collapsible navigation drawer
 import { FileText, Inbox, Sliders, Plug, Activity, FileSpreadsheet, LayoutDashboard, History, Bell } from 'lucide-react';
 const App = () => {
-    const { setWorkflows, selectedWorkflow, setSelectedWorkflow, currentView, sidebarOpen, themeMode, setView } = useWorkflowStore();
+    const { setWorkflows, selectedWorkflow, setSelectedWorkflow, currentView, sidebarOpen, themeMode, setView, confirmModalState, showConfirm, showAlert } = useWorkflowStore();
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [copyDialogOpen, setCopyDialogOpen] = useState(false);
     const [copyWorkflowSource, setCopyWorkflowSource] = useState(null);
@@ -136,9 +137,15 @@ const App = () => {
         }
     };
     const handleDeleteWorkflow = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this workflow and all its versions?')) {
+        const isConfirmed = await showConfirm({
+            title: 'Delete Workflow Definition',
+            message: 'Are you sure you want to delete this workflow and all its versions? This action cannot be undone.',
+            confirmText: 'Delete Workflow',
+            cancelText: 'Cancel',
+            severity: 'error'
+        });
+        if (!isConfirmed)
             return;
-        }
         try {
             const response = await fetch(`/api/workflows/${id}`, {
                 method: 'DELETE',
@@ -211,9 +218,15 @@ const App = () => {
         }
     };
     const handleDeleteVersion = async (versionId) => {
-        if (!window.confirm('Are you sure you want to delete this version?')) {
+        const isConfirmed = await showConfirm({
+            title: 'Delete Workflow Version',
+            message: 'Are you sure you want to delete this version draft? This action cannot be undone.',
+            confirmText: 'Delete Version',
+            cancelText: 'Cancel',
+            severity: 'error'
+        });
+        if (!isConfirmed)
             return;
-        }
         try {
             const response = await fetch(`/api/workflows/versions/${versionId}`, {
                 method: 'DELETE',
@@ -312,7 +325,8 @@ const App = () => {
         }} onSubmit={handleCopyWorkflow} initialData={copyWorkflowSource ? {
             name: `${copyWorkflowSource.name} Copy`,
             key: `${copyWorkflowSource.key}_COPY`,
-            description: copyWorkflowSource.description || ''
+            description: copyWorkflowSource.description || '',
+            circleId: copyWorkflowSource.circleId
         } : null} mode="copy"/>
 
         <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
@@ -320,6 +334,8 @@ const App = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        <ConfirmModal {...confirmModalState} />
       </Box>
     </ThemeProvider>);
 };

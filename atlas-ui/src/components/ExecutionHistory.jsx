@@ -7,13 +7,33 @@ import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import { Select, MenuItem, FormControl, Checkbox, ListItemText } from '@mui/material';
 import { useWorkflowStore } from '../store/workflowStore.js';
+
+const CIRCLE_OPTIONS = [
+  { id: 101, label: '101 - MH (Maharashtra)', badge: 'MH', color: '#00A05A' },
+  { id: 102, label: '102 - DL (Delhi)', badge: 'DL', color: '#0CADEF' },
+  { id: 103, label: '103 - KA (Karnataka)', badge: 'KA', color: '#8b5cf6' },
+  { id: 104, label: '104 - TN (Tamil Nadu)', badge: 'TN', color: '#ff6d00' },
+  { id: 105, label: '105 - DL_NCR (Delhi NCR)', badge: 'NCR', color: '#d97706' },
+  { id: 106, label: '106 - ROWB (West Bengal)', badge: 'WB', color: '#64748b' },
+];
+
 export const ExecutionHistory = ({ onClose, onShowNotification }) => {
-    const { executions, setExecutions, setCurrentExecution, setReplayVersion, setView } = useWorkflowStore();
+    const { executions, setExecutions, setCurrentExecution, setReplayVersion, setView, showConfirm, selectedCircleIds } = useWorkflowStore();
+    const [circleFilters, setCircleFilters] = useState(selectedCircleIds || []);
     const [loading, setLoading] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+
+    // Keep circleFilters synced with global selectedCircleIds
+    useEffect(() => {
+        if (selectedCircleIds) {
+            setCircleFilters(selectedCircleIds);
+        }
+    }, [selectedCircleIds]);
+
     const handleChangePage = (_event, newPage) => {
         setPage(newPage);
     };
@@ -24,7 +44,8 @@ export const ExecutionHistory = ({ onClose, onShowNotification }) => {
     const fetchExecutions = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/executions?page=0&size=100');
+            const circleParam = circleFilters && circleFilters.length > 0 ? `&circleId=${encodeURIComponent(circleFilters.join(','))}` : '';
+            const response = await fetch(`/api/executions?page=0&size=100${circleParam}`);
             if (!response.ok)
                 throw new Error('Failed to fetch executions');
             const data = await response.json();
@@ -37,9 +58,16 @@ export const ExecutionHistory = ({ onClose, onShowNotification }) => {
             setLoading(false);
         }
     };
-    useEffect(() => { fetchExecutions(); }, []);
+    useEffect(() => { fetchExecutions(); }, [circleFilters]);
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this execution log?'))
+        const isConfirmed = await showConfirm({
+            title: 'Delete Execution Log',
+            message: 'Are you sure you want to delete this execution log entry?',
+            confirmText: 'Delete Log',
+            cancelText: 'Cancel',
+            severity: 'error'
+        });
+        if (!isConfirmed)
             return;
         setDeletingId(id);
         try {
@@ -101,6 +129,40 @@ export const ExecutionHistory = ({ onClose, onShowNotification }) => {
             {executions.length} execution{executions.length !== 1 ? 's' : ''} recorded
           </Typography>
         </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
+          <FormControl size="small" variant="outlined" sx={{ minWidth: 150 }}>
+            <Select
+              multiple
+              value={circleFilters}
+              onChange={(e) => {
+                const val = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value;
+                setCircleFilters(val);
+              }}
+              displayEmpty
+              renderValue={(selected) => {
+                if (!selected || selected.length === 0) return 'All Circles';
+                return selected.map(id => {
+                  const opt = CIRCLE_OPTIONS.find(c => c.id === Number(id));
+                  return opt ? opt.badge : id;
+                }).join(', ');
+              }}
+              sx={{
+                height: 32,
+                fontSize: '12px',
+                fontWeight: 600,
+                bgcolor: 'background.default',
+                borderRadius: '6px'
+              }}
+            >
+              {CIRCLE_OPTIONS.map((opt) => (
+                <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: '12px' }}>
+                  <Checkbox checked={circleFilters.indexOf(opt.id) > -1} size="small" />
+                  <ListItemText primary={opt.label} primaryTypographyProps={{ fontSize: '12px' }} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
         <Tooltip title="Refresh">
           <IconButton onClick={fetchExecutions} disabled={loading} size="small" sx={{ mr: 1 }}>
             {loading ? <CircularProgress size={16}/> : <RefreshIcon />}
@@ -122,6 +184,7 @@ export const ExecutionHistory = ({ onClose, onShowNotification }) => {
                 <TableRow>
                    <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>STATUS</TableCell>
                   <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>WORKFLOW</TableCell>
+                  <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>CIRCLE ID</TableCell>
                   <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>OUTCOME</TableCell>
                   <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>STEPS</TableCell>
                   <TableCell sx={{ bgcolor: 'background.default', fontWeight: 800, fontSize: '10px', letterSpacing: 1, color: 'text.secondary', py: 1 }}>DURATION</TableCell>
@@ -154,13 +217,19 @@ export const ExecutionHistory = ({ onClose, onShowNotification }) => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ py: 1.5 }}>
+                      {exec.circleId != null ? (() => {
+                        const opt = CIRCLE_OPTIONS.find(c => c.id === exec.circleId);
+                        return <Chip label={opt ? opt.label : `Circle ${exec.circleId}`} size="small" variant="outlined" sx={{ height: 18, fontSize: '9px', fontWeight: 700, borderColor: opt ? opt.color : 'rgba(99,102,241,0.4)', color: opt ? opt.color : '#a5b4fc' }}/>;
+                      })() : <Typography variant="caption" color="text.secondary">—</Typography>}
+                    </TableCell>
+                    <TableCell sx={{ py: 1.5 }}>
                       {exec.outcomeNodeLabel
                     ? <Chip label={exec.outcomeNodeLabel} size="small" sx={{ height: 18, fontSize: '9px', fontWeight: 700, bgcolor: 'rgba(168,85,247,0.15)', color: '#c084fc' }}/>
                     : <Typography variant="caption" color="text.secondary">—</Typography>}
                     </TableCell>
                     <TableCell sx={{ py: 1.5 }}>
                       <Typography variant="caption" sx={{ fontWeight: 700, color: '#6366f1' }}>
-                        {exec.executionTrace?.length || 0}
+                        {exec.stepCount ?? exec.executionTrace?.length ?? 0}
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ py: 1.5 }}>

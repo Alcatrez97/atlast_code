@@ -11,7 +11,7 @@ import TimerIcon from '@mui/icons-material/Timer';
 import { useWorkflowStore } from '../store/workflowStore.js';
 import { IntegrationForm } from './IntegrationForm';
 export const IntegrationRegistryPage = ({ onShowNotification }) => {
-    const { goBack } = useWorkflowStore();
+    const { goBack, showConfirm } = useWorkflowStore();
     const [integrations, setIntegrations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -38,7 +38,14 @@ export const IntegrationRegistryPage = ({ onShowNotification }) => {
     }, []);
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (!window.confirm('Are you sure you want to delete this integration endpoint? Workflows referencing this provider will fail at runtime.'))
+        const isConfirmed = await showConfirm({
+            title: 'Delete Integration Endpoint',
+            message: 'Are you sure you want to delete this integration endpoint? Workflows referencing this provider will fail at runtime.',
+            confirmText: 'Delete Integration',
+            cancelText: 'Cancel',
+            severity: 'error'
+        });
+        if (!isConfirmed)
             return;
         try {
             const res = await fetch(`/api/integrations/${id}`, { method: 'DELETE' });
@@ -65,13 +72,13 @@ export const IntegrationRegistryPage = ({ onShowNotification }) => {
         (i.endpointUrl && i.endpointUrl.toLowerCase().includes(search.toLowerCase())));
     const accentColor = '#14b8a6'; // Teal/cyan accent
     return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
-      <Container maxWidth="lg">
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Title bar */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton onClick={() => goBack()} sx={{ color: accentColor, border: `1px solid rgba(20,184,166,0.2)` }}>
-              <ArrowBackIcon />
-            </IconButton>
+          <IconButton onClick={() => goBack()} sx={{ color: '#2F3043', border: '1px solid #2f304344' }}>
+            <ArrowBackIcon />
+          </IconButton>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
                 Integration Registry
@@ -81,11 +88,14 @@ export const IntegrationRegistryPage = ({ onShowNotification }) => {
               </Typography>
             </Box>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
-            background: `linear-gradient(135deg, ${accentColor} 0%, #0d9488 100%)`,
-            boxShadow: `0 4px 14px rgba(20,184,166,0.3)`,
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
+            borderColor: '#686b9744',
+            color: '#2F3043',
             fontWeight: 700,
-            '&:hover': { background: '#0d9488' }
+            '&:hover': {
+                borderColor: '#686b9744',
+                bgcolor: 'rgba(104, 107, 151, 0.12)',
+            }
         }}>
             Register Integration
           </Button>

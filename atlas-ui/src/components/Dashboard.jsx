@@ -40,23 +40,23 @@ export const Dashboard = () => {
             });
         }
     });
-    return (<Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 4, minHeight: '92vh', transition: 'background-color 0.25s ease-in-out' }}>
+    return (<Box className="atlas-dashboard-root" sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 4, minHeight: '92vh', transition: 'background-color 0.25s ease-in-out' }}>
       {/* Page Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography sx={{ fontWeight: 500, color: 'text.primary', fontSize: '1.25rem', mb: 0.5 }}>
+      <Box className="atlas-dashboard-header" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box className="atlas-dashboard-header-text">
+          <Typography className="atlas-dashboard-title" sx={{ fontWeight: 500, color: 'text.primary', fontSize: '1.25rem', mb: 0.5 }}>
             System Dashboard
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography className="atlas-dashboard-subtitle" variant="body1" color="text.secondary">
             Operational overview of pipeline definition health, registries, and workload queues.
           </Typography>
         </Box>
       </Box>
 
       {/* Metrics Row */}
-      <Grid container spacing={3}>
+      <Grid className="atlas-dashboard-metrics-grid" container spacing={3}>
         <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-          <Card sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+          <Card className="atlas-dashboard-stat-card total-workflows" sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
             <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2.5 }}>
               <Box sx={{
             bgcolor: 'rgba(12, 173, 239, 0.1)',

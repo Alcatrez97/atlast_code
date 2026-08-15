@@ -32,18 +32,20 @@ export const VersionDrawer = ({ open, onClose, onCreateDraft, onTransitionStatus
     const handleTransition = (version, targetStatus) => {
         setErrorMsg(null);
         const currentStatus = version.status.toUpperCase();
-        // Check role authorization
-        if (targetStatus === 'REVIEW' && activeRole !== 'Author' && activeRole !== 'Publisher' && activeRole !== 'Reviewer') {
-            setErrorMsg('Only an Author can submit for review.');
-            return;
-        }
-        if ((targetStatus === 'APPROVED' || (targetStatus === 'DRAFT' && currentStatus === 'REVIEW')) && activeRole !== 'Reviewer') {
-            setErrorMsg('Only a Reviewer can Approve or Reject versions.');
-            return;
-        }
-        if (targetStatus === 'PUBLISHED' && activeRole !== 'Publisher') {
-            setErrorMsg('Only a Publisher can publish approved versions.');
-            return;
+        // Check role authorization (Admin has full privileges of Author, Reviewer, and Publisher)
+        if (activeRole !== 'Admin') {
+            if (targetStatus === 'REVIEW' && activeRole !== 'Author' && activeRole !== 'Publisher' && activeRole !== 'Reviewer') {
+                setErrorMsg('Only an Author or Admin can submit for review.');
+                return;
+            }
+            if ((targetStatus === 'APPROVED' || (targetStatus === 'DRAFT' && currentStatus === 'REVIEW')) && activeRole !== 'Reviewer') {
+                setErrorMsg('Only a Reviewer or Admin can Approve or Reject versions.');
+                return;
+            }
+            if (targetStatus === 'PUBLISHED' && activeRole !== 'Publisher') {
+                setErrorMsg('Only a Publisher or Admin can publish approved versions.');
+                return;
+            }
         }
         onTransitionStatus(version.id, targetStatus);
     };

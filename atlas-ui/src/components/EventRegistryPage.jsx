@@ -14,7 +14,7 @@ import TopicIcon from '@mui/icons-material/Topic';
 import { useWorkflowStore } from '../store/workflowStore.js';
 import { EventForm } from './EventForm';
 export const EventRegistryPage = ({ onShowNotification }) => {
-    const { goBack } = useWorkflowStore();
+    const { goBack, showConfirm } = useWorkflowStore();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -46,7 +46,14 @@ export const EventRegistryPage = ({ onShowNotification }) => {
     }, []);
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (!window.confirm('Are you sure you want to delete this event definition? Worflows listening on this event key will no longer resume.'))
+        const isConfirmed = await showConfirm({
+            title: 'Delete Event Definition',
+            message: 'Are you sure you want to delete this event definition? Workflows listening on this event key will no longer resume.',
+            confirmText: 'Delete Event',
+            cancelText: 'Cancel',
+            severity: 'error'
+        });
+        if (!isConfirmed)
             return;
         try {
             const res = await fetch(`/api/event-definitions/${id}`, { method: 'DELETE' });
@@ -126,13 +133,13 @@ export const EventRegistryPage = ({ onShowNotification }) => {
         (e.kafkaTopic && e.kafkaTopic.toLowerCase().includes(search.toLowerCase())));
     const accentColor = '#8b5cf6'; // Violet theme accent
     return (<Box sx={{ bgcolor: 'background.default', minHeight: '92vh', py: 4, color: 'text.primary', transition: 'background-color 0.25s ease-in-out' }}>
-      <Container maxWidth="lg">
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Title bar */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton onClick={() => goBack()} sx={{ color: accentColor, border: `1px solid rgba(139,92,246,0.2)` }}>
-              <ArrowBackIcon />
-            </IconButton>
+          <IconButton onClick={() => goBack()} sx={{ color: '#2F3043', border: '1px solid #2f304344' }}>
+            <ArrowBackIcon />
+          </IconButton>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
                 Predefined Event Registry
@@ -143,14 +150,15 @@ export const EventRegistryPage = ({ onShowNotification }) => {
             </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
-            background: `linear-gradient(135deg, ${accentColor} 0%, #6d28d9 100%)`,
-            boxShadow: `0 4px 14px rgba(139,92,246,0.3)`,
-            fontWeight: 700,
-            textTransform: 'lowercase', // CTA lower-case constraint
-            borderRadius: 2,
-            '&:hover': { background: '#6d28d9' }
-        }}>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateNew} sx={{
+              borderColor: '#686b9744',
+              color: '#2F3043',
+              fontWeight: 700,
+              '&:hover': {
+                borderColor: '#686b9744',
+                bgcolor: 'rgba(104, 107, 151, 0.12)',
+              }
+            }}>
               register event
             </Button>
           </Box>

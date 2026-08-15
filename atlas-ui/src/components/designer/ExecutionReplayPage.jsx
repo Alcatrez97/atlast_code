@@ -16,6 +16,7 @@ import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import HubIcon from '@mui/icons-material/Hub';
 import { useWorkflowStore } from '../../store/workflowStore.js';
 import { DesignerCanvas } from './DesignerCanvas';
+import './designer.css';
 export const ExecutionReplayPage = ({ onShowNotification }) => {
     const { currentExecution, replayVersion, setSelectedVersion, setView, goBack } = useWorkflowStore();
     const [activeTraceStep, setActiveTraceStep] = useState(0);
@@ -166,9 +167,9 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
         return <span style={{ color: '#e2e8f0' }}>"{val.toString()}"</span>;
     };
     const filteredContext = Object.entries(currentExecution.inputContext || {}).filter(([key]) => key.toLowerCase().includes(searchTerm.toLowerCase()));
-    return (<Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+    return (<Box className="atlas-replay-root" sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {/* Replay info bar */}
-      <Box sx={{
+      <Box className="atlas-replay-infobar designer-replay-header" sx={{
             display: 'flex', alignItems: 'center', gap: 2, px: 3, py: 1.5,
             bgcolor: currentExecution.status === 'COMPLETED' ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
             borderBottom: '1px solid',
@@ -176,7 +177,7 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
             zIndex: 10,
             flexShrink: 0,
         }}>
-        <IconButton size="small" onClick={() => goBack()} sx={{ color: 'text.secondary' }}>
+        <IconButton size="small" onClick={() => goBack()} sx={{ color: '#2F3043', border: '1px solid #2f304344' }}>
           <ArrowBackIcon />
         </IconButton>
 
@@ -184,7 +185,7 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
             ? <CheckCircleIcon sx={{ color: '#10b981' }}/>
             : <ErrorIcon sx={{ color: '#ef4444' }}/>}
 
-        <Box>
+        <Box className="atlas-replay-title-group">
           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
             Execution Replay — {currentExecution.workflowKey}
           </Typography>
@@ -193,7 +194,7 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1.5, ml: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Box className="atlas-replay-badges-group" sx={{ display: 'flex', gap: 1.5, ml: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <Chip label={currentExecution.status} size="small" sx={{
             height: 20, fontSize: '9px', fontWeight: 800,
             bgcolor: currentExecution.status === 'COMPLETED' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
@@ -209,7 +210,7 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
           {currentExecution.outcomeNodeLabel && (<Chip label={`→ ${currentExecution.outcomeNodeLabel}`} size="small" sx={{ height: 20, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(168,85,247,0.2)', color: '#c084fc' }}/>)}
         </Box>
 
-        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box className="atlas-replay-actions-group" sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
           <FormControlLabel control={<Switch size="small" checked={debugView} onChange={(e) => {
                 setDebugView(e.target.checked);
                 setActiveTraceStep(0);
@@ -221,9 +222,9 @@ export const ExecutionReplayPage = ({ onShowNotification }) => {
       </Box>
 
       {/* Main content Split */}
-      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+      <Box className="atlas-replay-split-body" sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
         {/* Left Sidebar Pane */}
-        <Box sx={{
+        <Box className="atlas-replay-sidebar designer-replay-sidebar" sx={{
             width: 360,
             flexShrink: 0,
             display: 'flex',

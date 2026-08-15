@@ -4,7 +4,7 @@ export const useWorkflowStore = create((set) => ({
     selectedWorkflow: null,
     selectedVersion: null,
     sidebarOpen: true,
-    activeRole: 'Author',
+    activeRole: 'Admin',
     currentView: 'dashboard',
     viewHistory: [],
     designerNodes: [],
@@ -19,6 +19,62 @@ export const useWorkflowStore = create((set) => ({
     integrations: [],
     instances: [],
     events: [],
+    selectedCircleIds: [],
+    confirmModalState: {
+        open: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        severity: 'warning',
+        onConfirm: null,
+        onCancel: null,
+    },
+    showConfirm: ({ title = 'Confirm Action', message, confirmText = 'Confirm', cancelText = 'Cancel', severity = 'warning' }) => {
+        return new Promise((resolve) => {
+            set({
+                confirmModalState: {
+                    open: true,
+                    title,
+                    message,
+                    confirmText,
+                    cancelText,
+                    severity,
+                    onConfirm: () => {
+                        set((state) => ({ confirmModalState: { ...state.confirmModalState, open: false } }));
+                        resolve(true);
+                    },
+                    onCancel: () => {
+                        set((state) => ({ confirmModalState: { ...state.confirmModalState, open: false } }));
+                        resolve(false);
+                    }
+                }
+            });
+        });
+    },
+    showAlert: ({ title = 'Notification', message, severity = 'info' }) => {
+        return new Promise((resolve) => {
+            set({
+                confirmModalState: {
+                    open: true,
+                    title,
+                    message,
+                    confirmText: 'OK',
+                    cancelText: null,
+                    severity,
+                    onConfirm: () => {
+                        set((state) => ({ confirmModalState: { ...state.confirmModalState, open: false } }));
+                        resolve(true);
+                    },
+                    onCancel: () => {
+                        set((state) => ({ confirmModalState: { ...state.confirmModalState, open: false } }));
+                        resolve(true);
+                    }
+                }
+            });
+        });
+    },
+    closeConfirm: () => set((state) => ({ confirmModalState: { ...state.confirmModalState, open: false } })),
     setWorkflows: (workflows) => set({ workflows }),
     setSelectedWorkflow: (selectedWorkflow) => set((state) => {
         let selectedVersion = null;
@@ -69,4 +125,5 @@ export const useWorkflowStore = create((set) => ({
     setIntegrations: (integrations) => set({ integrations }),
     setInstances: (instances) => set({ instances }),
     setEvents: (events) => set({ events }),
+    setSelectedCircleIds: (selectedCircleIds) => set({ selectedCircleIds }),
 }));

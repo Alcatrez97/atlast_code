@@ -84,12 +84,9 @@ export const IntegrationForm = ({ integration, onClose, onRefresh, onShowNotific
         }
     };
     const accentColor = '#14b8a6'; // Teal/cyan accent for integrations
-    return (<Container maxWidth="md" sx={{ py: 2 }}>
+    return (<Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 2 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-        <IconButton onClick={onClose} sx={{ color: accentColor, border: `1px solid rgba(20,184,166,0.2)` }}>
-          <ArrowBackIcon />
-        </IconButton>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
             {integration ? 'modify integration' : 'register new integration'}

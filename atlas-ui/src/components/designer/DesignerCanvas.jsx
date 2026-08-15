@@ -12,6 +12,7 @@ import { nodeTypes } from './CustomNode';
 import { NodePropertiesDrawer } from './NodePropertiesDrawer';
 import { EdgePropertiesDrawer } from './EdgePropertiesDrawer';
 import { TraceTimeline } from '../TraceTimeline';
+import './designer.css';
 // Build map of nodeId → step for overlay rendering
 const buildTraceMap = (trace) => {
     const map = new Map();
@@ -67,6 +68,17 @@ const DesignerCanvasInner = ({ onRefreshWorkflows, onShowNotification, traceMode
         if (hasRuntimeGraph || selectedVersion?.definition) {
             const rawNodes = baseNodes;
             const rawEdges = baseEdges;
+
+            // Detect and preserve loaded edge type across normal and trace modes
+            const loadedType = rawEdges.length > 0 && rawEdges[0].type ? rawEdges[0].type : defaultEdgeType;
+            if (loadedType && loadedType !== defaultEdgeType) {
+                setDefaultEdgeType(loadedType);
+                setCanvasKey((k) => k + 1);
+            }
+
+            const isDarkMode = theme.palette.mode === 'dark';
+            const unvisitedStroke = isDarkMode ? '#64748b' : '#94a3b8'; // Visible slate stroke
+
             if (traceMode && executionTrace.length > 0) {
                 // Slice execution trace up to activeTraceStep
                 const traceSlice = activeTraceStep !== null
@@ -107,21 +119,25 @@ const DesignerCanvasInner = ({ onRefreshWorkflows, onShowNotification, traceMode
                         ...n,
                         style: {
                             ...n.style,
-                            opacity: isVisited ? 1 : 0.25,
+                            opacity: isVisited ? 1 : 0.35,
                             filter,
                             transition: 'filter 0.3s, opacity 0.3s',
                         }
                     };
                 });
-                // Style traversed edges
+                // Style traversed edges with high visibility
                 const visitedEdges = new Set(traceSlice.filter(s => s.edgeTaken).map(s => s.edgeTaken));
-                const styledEdges = rawEdges.map((e) => ({
-                    ...e,
-                    style: visitedEdges.has(e.id)
-                        ? { stroke: '#10b981', strokeWidth: 3 }
-                        : { stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 },
-                    animated: visitedEdges.has(e.id),
-                }));
+                const styledEdges = rawEdges.map((e) => {
+                    const isVisited = visitedEdges.has(e.id);
+                    return {
+                        ...e,
+                        type: e.type || loadedType || defaultEdgeType,
+                        style: isVisited
+                            ? { stroke: '#10b981', strokeWidth: 3.5, filter: 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.8))' }
+                            : { stroke: unvisitedStroke, strokeWidth: 2, opacity: 0.75 },
+                        animated: isVisited,
+                    };
+                });
                 setNodes(finalNodes);
                 setEdges(styledEdges);
             }
@@ -130,26 +146,17 @@ const DesignerCanvasInner = ({ onRefreshWorkflows, onShowNotification, traceMode
                     const stroke = getEdgeColor(e);
                     return {
                         ...e,
+                        type: e.type || loadedType || defaultEdgeType,
                         style: { stroke, strokeWidth: 2, ...e.style },
                         animated: e.animated !== undefined ? e.animated : true
                     };
                 });
                 setNodes(rawNodes);
                 setEdges(styledEdges);
-                // Detect the persisted edge type from the loaded definition.
-                // If it differs from what's currently shown, bump canvasKey so ReactFlow
-                // remounts and actually re-renders all edges with the correct shape.
-                // ReactFlow caches edge renderers by id, so a simple setEdges() call is
-                // not enough when only the `type` property changes.
-                const loadedType = rawEdges.length > 0 ? (rawEdges[0].type || 'smoothstep') : 'smoothstep';
-                if (loadedType !== defaultEdgeType) {
-                    setDefaultEdgeType(loadedType);
-                    setCanvasKey((k) => k + 1);
-                }
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedVersion, traceMode, executionTrace, activeTraceStep, runtimeGraph]);
+    }, [selectedVersion, traceMode, executionTrace, activeTraceStep, runtimeGraph, theme.palette.mode]);
     // Auto-select active trace step node to show properties in drawer
     useEffect(() => {
         if (traceMode && activeTraceStep !== null && executionTrace[activeTraceStep]) {
@@ -340,86 +347,77 @@ const DesignerCanvasInner = ({ onRefreshWorkflows, onShowNotification, traceMode
             case 'PUBLISHED': return 'success';
             default: return 'default';
         }
-    };
+}
     const activeNode = selectedNode ? nodes.find((n) => n.id === selectedNode.id) : null;
     const activeEdge = selectedEdge ? edges.find((e) => e.id === selectedEdge.id) : null;
     const traceStep = activeNode && traceMode
         ? traceMap.get(activeNode.id) || null
         : null;
-    return (<Box sx={{ display: 'flex', flexDirection: 'column', height: hideHeader ? '100%' : '100vh', width: hideHeader ? '100%' : '100vw', overflow: 'hidden' }}>
-      {/* Header */}
-      {!hideHeader && (<AppBar position="static" sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-          <Toolbar variant="dense">
-            <IconButton edge="start" color="inherit" onClick={() => goBack()} sx={{ mr: 2 }}>
-              <ArrowBackIcon />
-            </IconButton>
-            <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="subtitle1" color="text.primary" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontWeight: 700 }}>
-                {selectedWorkflow?.name}
-                <Chip label={`v${selectedVersion?.version}`} size="small" variant="outlined" sx={{ height: 20, fontSize: '10px', fontWeight: 700 }}/>
-                <Chip label={selectedVersion?.status} color={getStatusColor(selectedVersion?.status || 'DRAFT')} size="small" sx={{ height: 20, fontSize: '9px', fontWeight: 800 }}/>
-                {traceMode && (<Chip label="TRACE REPLAY" icon={<VisibilityIcon sx={{ fontSize: 10 }}/>} size="small" sx={{ height: 20, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}/>)}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">ID: {selectedWorkflow?.key}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {!isReadOnly && (<>
-                  <Button variant="outlined" color="error" size="small" startIcon={<DeleteIcon />} onClick={onDeleteSelected} sx={{ borderColor: 'rgba(244,67,54,0.3)' }}>
-                    Delete Selected
-                  </Button>
-                  <Button variant="contained" color="primary" size="small" startIcon={isSaving ? <CircularProgress size={14} color="inherit"/> : <SaveIcon />} onClick={handleSave} disabled={isSaving} sx={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 4px 10px rgba(99,102,241,0.3)' }}>
-                    Save Design
-                  </Button>
-                </>)}
-              {isReadOnly && !traceMode && (<Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pr: 2 }}>
-                  Read-Only Preview
-                </Typography>)}
-              {traceMode && (<Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pr: 2, color: '#10b981' }}>
-                  {executionTrace.length} steps traced
-                </Typography>)}
-            </Box>
-          </Toolbar>
-        </AppBar>)}
+    return (
+        <Box className={hideHeader ? "designer-canvas-container-embedded" : "designer-canvas-container"}>
+            {/* Header */}
+            {!hideHeader && (
+                <AppBar position="static" className="designer-canvas-toolbar">
+                    <Toolbar variant="dense" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: '24px !important', minHeight: '56px !important' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <IconButton edge="start" color="inherit" onClick={() => goBack()} sx={{ color: 'text.secondary' }}>
+                                <ArrowBackIcon />
+                            </IconButton>
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                <Typography variant="subtitle1" color="text.primary" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontWeight: 700 }}>
+                                    {selectedWorkflow?.name}
+                                    <Chip label={`v${selectedVersion?.version}`} size="small" variant="outlined" sx={{ height: 20, fontSize: '10px', fontWeight: 700 }} />
+                                    <Chip label={selectedVersion?.status} color={getStatusColor(selectedVersion?.status || 'DRAFT')} size="small" sx={{ height: 20, fontSize: '9px', fontWeight: 800 }} />
+                                    {traceMode && (<Chip label="TRACE REPLAY" icon={<VisibilityIcon sx={{ fontSize: 10 }} />} size="small" sx={{ height: 20, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }} />)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">ID: {selectedWorkflow?.key}</Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            {!isReadOnly && (<>
+                                <Button variant="outlined" color="error" size="small" startIcon={<DeleteIcon />} onClick={onDeleteSelected} sx={{ borderColor: 'rgba(244,67,54,0.3)' }}>
+                                    Delete Selected
+                                </Button>
+                                <Button variant="contained" color="primary" size="small" startIcon={isSaving ? <CircularProgress size={14} color="inherit" /> : <SaveIcon />} onClick={handleSave} disabled={isSaving} sx={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 4px 10px rgba(99,102,241,0.3)' }}>
+                                    Save Design
+                                </Button>
+                            </>)}
+                            {isReadOnly && !traceMode && (<Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pr: 2 }}>
+                                Read-Only Preview
+                            </Typography>)}
+                            {traceMode && (<Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pr: 2, color: '#10b981' }}>
+                                {executionTrace.length} steps traced
+                            </Typography>)}
+                        </Box>
+                    </Toolbar>
+                </AppBar>
+            )}
 
-      {/* Workspace */}
-      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
-        {!isReadOnly && <NodeCatalog />}
+            {/* Workspace */}
+            <Box className="atlas-designer-workspace" sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+                {!isReadOnly && <NodeCatalog />}
 
-        <Box sx={{ flexGrow: 1, height: '100%', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Canvas */}
-          <Box sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }} onDragOver={onDragOver} onDrop={onDrop}>
-            <Box sx={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            zIndex: 10,
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            p: 0.5,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-        }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', pl: 1, pr: 0.5, fontWeight: 500, fontSize: '10px' }}>
-                LINK STYLE:
-              </Typography>
-              <Select size="small" value={defaultEdgeType} onChange={(e) => handleEdgeTypeChange(e.target.value)} sx={{
-            height: 20,
-            fontSize: '10px',
-            color: 'text.primary',
-            minWidth: 95,
-            '.MuiOutlinedInput-notchedOutline': { border: 'none' },
-            '& .MuiSelect-select': { py: '2px !important', px: '6px !important' }
-        }}>
-                <MenuItem value="bezier" sx={{ fontSize: '10px', py: 0.5 }}>Curved</MenuItem>
-                <MenuItem value="smoothstep" sx={{ fontSize: '10px', py: 0.5 }}>Smooth Step</MenuItem>
-                <MenuItem value="step" sx={{ fontSize: '10px', py: 0.5 }}>Sharp Step</MenuItem>
-                <MenuItem value="straight" sx={{ fontSize: '10px', py: 0.5 }}>Straight</MenuItem>
-              </Select>
-            </Box>
+                <Box className="atlas-designer-main-canvas" sx={{ flexGrow: 1, height: '100%', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {/* Canvas */}
+                    <Box className="atlas-designer-canvas-wrapper" sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }} onDragOver={onDragOver} onDrop={onDrop}>
+                        <Box className="designer-canvas-link-picker">
+                            <Typography variant="caption" sx={{ color: 'text.secondary', pl: 1, pr: 0.5, fontWeight: 500, fontSize: '10px' }}>
+                                LINK STYLE:
+                            </Typography>
+                            <Select size="small" value={defaultEdgeType} onChange={(e) => handleEdgeTypeChange(e.target.value)} sx={{
+                                height: 20,
+                                fontSize: '10px',
+                                color: 'text.primary',
+                                minWidth: 95,
+                                '.MuiOutlinedInput-notchedOutline': { border: 'none' },
+                                '& .MuiSelect-select': { py: '2px !important', px: '6px !important' }
+                            }}>
+                                <MenuItem value="bezier" sx={{ fontSize: '10px', py: 0.5 }}>Curved</MenuItem>
+                                <MenuItem value="smoothstep" sx={{ fontSize: '10px', py: 0.5 }}>Smooth Step</MenuItem>
+                                <MenuItem value="step" sx={{ fontSize: '10px', py: 0.5 }}>Sharp Step</MenuItem>
+                                <MenuItem value="straight" sx={{ fontSize: '10px', py: 0.5 }}>Straight</MenuItem>
+                            </Select>
+                        </Box>
             <ReactFlow key={canvasKey} nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onPaneClick={onPaneClick} nodeTypes={nodeTypes} nodesDraggable={!isReadOnly} nodesConnectable={!isReadOnly} elementsSelectable={!isReadOnly} fitView>
               <Background color={theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'} gap={16} size={1}/>
               <Controls />

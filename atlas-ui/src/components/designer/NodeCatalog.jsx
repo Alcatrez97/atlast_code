@@ -11,6 +11,8 @@ import CallMergeIcon from '@mui/icons-material/CallMerge';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import './designer.css';
+
 const items = [
     {
         type: 'START',
@@ -90,84 +92,44 @@ const items = [
         color: '#f59e0b'
     }
 ];
+
 export const NodeCatalog = () => {
     const onDragStart = (event, nodeType) => {
         event.dataTransfer.setData('application/reactflow', nodeType);
         event.dataTransfer.effectAllowed = 'move';
     };
-    return (<Box sx={{
-            width: 250,
-            borderRight: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'background.paper',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            maxHeight: '100%',
-            overflow: 'hidden',
-            boxSizing: 'border-box',
-            p: 2.5
-        }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-        Node Catalog
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+
+    return (
+        <Box className="designer-catalog-container">
+            <Typography variant="subtitle2" className="designer-catalog-title">
+                Node Catalog
+            </Typography>
+      <Typography variant="caption" className="designer-catalog-caption">
         Drag and drop elements onto the canvas grid to map the workflow logic.
       </Typography>
       <Divider sx={{ mb: 2 }}/>
 
-      <Box sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1.5,
-            overflowY: 'auto',
-            flexGrow: 1,
-            minHeight: 0,
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': {
-                display: 'none'
-            },
-            msOverflowStyle: 'none'
-        }}>
-        {items.map((item) => (<Card key={item.type} draggable onDragStart={(e) => onDragStart(e, item.type)} sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-                border: '1.5px dashed',
-                borderColor: 'divider',
-                borderRadius: 2.5,
-                cursor: 'grab',
-                flexShrink: 0,
-                transition: 'all 0.15s ease',
-                '&:hover': {
-                    borderColor: item.color,
-                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                    transform: 'translateY(-1px)'
-                },
-                '&:active': {
-                    cursor: 'grabbing'
-                }
-            }}>
-            <CardContent sx={{ p: 0, pl: 1, pr: 1, '&:last-child': { pb: 0 }, display: 'flex', gap: 1.0, alignItems: 'center', height: 24 }}>
-              <Box sx={{
-                width: 16,
-                height: 16,
-                borderRadius: 2,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
+      <Box className="designer-catalog-items">
+        {items.map((item) => (
+          <Card
+            key={item.type}
+            draggable
+            onDragStart={(e) => onDragStart(e, item.type)}
+            className="designer-catalog-card"
+          >
+            <CardContent className="designer-catalog-card-content">
+              <Box className="designer-catalog-icon-box">
                 {item.icon}
               </Box>
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '10px' }}>
                   {item.label}
                 </Typography>
-                {false && <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '9px', lineHeight: 1.2 }}>
-                  {item.description}
-                </Typography>}
               </Box>
             </CardContent>
-          </Card>))}
+          </Card>
+        ))}
       </Box>
-    </Box>);
+    </Box>
+  );
 };

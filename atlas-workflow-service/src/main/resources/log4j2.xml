@@ -22,7 +22,7 @@
     </Appenders>
 
     <Loggers>
-        <Logger name="com.enterprise.atlas" level="info" additivity="false">
+        <Logger name="com.vi.atlas" level="info" additivity="false">
             <AppenderRef ref="ConsoleAppender"/>
             <AppenderRef ref="FileAppender"/>
         </Logger>

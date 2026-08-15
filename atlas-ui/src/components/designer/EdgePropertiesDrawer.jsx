@@ -5,7 +5,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoIcon from '@mui/icons-material/Info';
+import './designer.css';
+
 const ACCENT_COLOR = '#818cf8'; // Premium light indigo for edges
+
 export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, onSaveEdge, onDeleteEdge }) => {
     const [label, setLabel] = useState('');
     const [condition, setCondition] = useState('');
@@ -14,6 +17,7 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
     const [sourceNode, setSourceNode] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+
     // Populate fields and fetch outcomes when edge changes
     useEffect(() => {
         if (edge) {
@@ -48,12 +52,14 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
             setSourceNode(null);
         }
     }, [edge, nodes]);
+
     const handleOutcomeChange = (val) => {
         setOutcomeType(val);
         if (val && (!label || label === '' || outcomes.some(o => o.name === label))) {
             setLabel(val);
         }
     };
+
     const handleSave = async () => {
         if (!edge || !onSaveEdge)
             return;
@@ -67,31 +73,13 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
             setIsSaving(false);
         }
     };
-    return (<Drawer anchor="right" open={open} onClose={onClose} variant="persistent" slotProps={{
-            paper: {
-                sx: {
-                    width: 340,
-                    bgcolor: 'background.paper',
-                    borderLeft: `1px solid ${ACCENT_COLOR}30`,
-                    boxShadow: `-8px 0 32px rgba(0,0,0,0.2)`,
-                    color: 'text.primary'
-                }
-            }
-        }}>
+
+    return (<Drawer anchor="right" open={open} onClose={onClose} variant="persistent" slotProps={{ paper: { className: 'designer-drawer-paper' } }}>
       {edge && (<Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* Header */}
-          <Box sx={{
-                display: 'flex', alignItems: 'center', p: 2,
-                borderBottom: `1px solid ${ACCENT_COLOR}20`,
-                background: `linear-gradient(135deg, ${ACCENT_COLOR}10 0%, transparent 100%)`
-            }}>
-            <Box sx={{
-                width: 32, height: 32, borderRadius: 2,
-                bgcolor: ACCENT_COLOR + '20',
-                border: `1px solid ${ACCENT_COLOR}40`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 1.5
-            }}>
-              <EditIcon sx={{ fontSize: 16, color: ACCENT_COLOR }}/>
+          <Box className="designer-drawer-header">
+            <Box className="designer-drawer-header-icon" sx={{ bgcolor: ACCENT_COLOR + '20', border: `1px solid ${ACCENT_COLOR}40` }}>
+              <EditIcon sx={{ fontSize: 18, color: ACCENT_COLOR }}/>
             </Box>
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
@@ -105,9 +93,9 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
             <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small"/></IconButton>
           </Box>
 
-          <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <Box className="designer-drawer-body">
             <Box>
-              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', letterSpacing: 1, display: 'block', mb: 1 }}>
+              <Typography variant="caption" className="designer-drawer-section-title">
                 EDGE PROPERTIES
               </Typography>
               <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#6b7280', display: 'block', mb: 1.5, wordBreak: 'break-all' }}>
@@ -134,7 +122,7 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
               <TextField fullWidth size="small" label="Routing Condition" value={condition} onChange={(e) => setCondition(e.target.value)} disabled={isReadOnly} placeholder="e.g. true, false, HIGH, context['amount'] > 10000" helperText="Condition evaluated by state machine traversal to route transactions" slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ mb: 2.5 }}/>
 
               {/* Help Box */}
-              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Box className="designer-drawer-help-box">
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
                   <InfoIcon sx={{ fontSize: 14, color: 'text.secondary' }}/>
                   <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary' }}>
@@ -155,7 +143,7 @@ export const EdgePropertiesDrawer = ({ open, edge, nodes, isReadOnly, onClose, o
           </Box>
 
           {/* Footer */}
-          {!isReadOnly && (<Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {!isReadOnly && (<Box className="designer-drawer-footer">
               {saved && <Alert severity="success" sx={{ mb: 1, borderRadius: 1, py: 0.5 }}>Saved!</Alert>}
               <Button fullWidth variant="contained" startIcon={isSaving ? <CircularProgress size={14} color="inherit"/> : <SaveIcon />} onClick={handleSave} disabled={isSaving} sx={{
                     background: `linear-gradient(135deg, ${ACCENT_COLOR} 0%, ${ACCENT_COLOR}cc 100%)`,
