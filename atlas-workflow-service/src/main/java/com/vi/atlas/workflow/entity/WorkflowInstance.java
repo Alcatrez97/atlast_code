@@ -15,11 +15,29 @@ import java.util.HashMap;
     @Index(name = "idx_inst_status", columnList = "status"),
     @Index(name = "idx_inst_created_at", columnList = "created_at")
 })
-public class WorkflowInstance {
+public class WorkflowInstance implements org.springframework.data.domain.Persistable<String> {
 
     @Id
     @Column(name = "workflow_instance_pk", length = 36)
     private String id;
+
+    @Version
+    @Column(name = "opt_lock_version")
+    private Long optLockVersion;
+
+    @Transient
+    private boolean isNew = true;
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
 
     @Column(name = "workflow_key", nullable = false, length = 100)
     private String workflowKey;
@@ -62,8 +80,9 @@ public class WorkflowInstance {
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.isNew = false;
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
+        if (this.updatedAt == null) this.updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
@@ -123,4 +142,7 @@ public class WorkflowInstance {
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }
+
+    public Long getOptLockVersion() { return optLockVersion; }
+    public void setOptLockVersion(Long optLockVersion) { this.optLockVersion = optLockVersion; }
 }

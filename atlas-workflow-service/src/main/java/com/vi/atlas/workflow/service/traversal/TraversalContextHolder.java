@@ -14,7 +14,7 @@ package com.vi.atlas.workflow.service.traversal;
  */
 public final class TraversalContextHolder {
 
-    private static final ThreadLocal<TraversalContext> HOLDER = new ThreadLocal<>();
+    private static final InheritableThreadLocal<TraversalContext> HOLDER = new InheritableThreadLocal<>();
 
     private TraversalContextHolder() {}
 

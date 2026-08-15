@@ -41,6 +41,9 @@ public class ParallelExecutionIntegrationTest {
     @Autowired
     private EventRoutingService eventRoutingService;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     private String workflowKeySync;
     private String workflowKeyAsync;
 
@@ -312,6 +315,7 @@ public class ParallelExecutionIntegrationTest {
 
         long expiry = System.currentTimeMillis() + 5000;
         while (System.currentTimeMillis() < expiry) {
+            entityManager.clear();
             instance = instanceRepository.findById(instanceId).orElseThrow();
             if ("COMPLETED".equalsIgnoreCase(instance.getStatus())) {
                 break;

@@ -9,6 +9,14 @@ public interface WorkflowCommand {
     String getCommandType();
 
     /**
+     * Returns true if this command performs remote network / I/O operations (HTTP REST, Kafka MQ, SMS),
+     * signaling to the engine that execution should be decoupled from database transaction boundaries.
+     */
+    default boolean isExternalIo() {
+        return false;
+    }
+
+    /**
      * Executes the custom logic associated with this command type.
      *
      * @param input mapped data from global context and static node attributes.

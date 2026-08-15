@@ -58,6 +58,22 @@
             <artifactId>atlas-common</artifactId>
         </dependency>
 
+        <!-- Caffeine Cache for L1 In-Memory Compiled Workflow Graph Caching -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Spring Retry & AOP for Self-Healing Optimistic Lock Retries -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- Spring Security Core for SecurityContextHolder -->
         <dependency>
             <groupId>org.springframework.security</groupId>

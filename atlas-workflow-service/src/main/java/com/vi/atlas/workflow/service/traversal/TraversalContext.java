@@ -54,4 +54,10 @@ public class TraversalContext {
 
     /** Set of node IDs already added to the runtime-graph {@code activeNodes} list. */
     public Set<String> activeNodeIds;
+
+    /**
+     * In-memory task instances accumulated during this traversal pass.
+     * Flushed in a single batch to the database at the traversal boundary.
+     */
+    public Map<String, com.vi.atlas.workflow.entity.TaskInstance> inMemoryTasks = new java.util.LinkedHashMap<>();
 }

@@ -20,7 +20,7 @@ public class TaskInstance {
     @Column(name = "task_instance_pk", length = 255)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinColumn(name = "instance_id", nullable = false, foreignKey = @ForeignKey(name = "fk_task_inst_workflow"))
     private WorkflowInstance workflowInstance;
 

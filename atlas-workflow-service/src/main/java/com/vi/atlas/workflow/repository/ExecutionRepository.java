@@ -21,9 +21,9 @@ public interface ExecutionRepository extends JpaRepository<ExecutionLog, String>
 
     List<ExecutionLog> findByContextIdAndStatus(String contextId, com.vi.atlas.workflow.entity.WorkflowInstanceStatus status);
 
-    @org.springframework.data.jpa.repository.Query("SELECT el FROM ExecutionLog el WHERE el.workflowInstance.id = :instanceId AND el.status = :status")
+    @org.springframework.data.jpa.repository.Query("SELECT el FROM ExecutionLog el WHERE el.instanceId = :instanceId AND el.status = :status")
     List<ExecutionLog> findByInstanceIdAndStatus(@org.springframework.data.repository.query.Param("instanceId") String instanceId, @org.springframework.data.repository.query.Param("status") com.vi.atlas.workflow.entity.WorkflowInstanceStatus status);
 
-    @org.springframework.data.jpa.repository.Query("SELECT el FROM ExecutionLog el WHERE el.workflowInstance.id = :instanceId ORDER BY el.startedAt ASC")
+    @org.springframework.data.jpa.repository.Query("SELECT el FROM ExecutionLog el WHERE el.instanceId = :instanceId ORDER BY el.startedAt ASC")
     List<ExecutionLog> findByInstanceId(@org.springframework.data.repository.query.Param("instanceId") String instanceId);
 }

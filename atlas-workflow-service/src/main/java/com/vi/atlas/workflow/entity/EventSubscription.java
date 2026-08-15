@@ -38,7 +38,7 @@ public class EventSubscription {
     @Convert(converter = GenericJsonConverter.MapConverter.class)
     private Map<String, Object> filterAttributes;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinColumn(name = "instance_id", nullable = false, foreignKey = @ForeignKey(name = "fk_sub_workflow_instance"))
     private WorkflowInstance workflowInstance;
 

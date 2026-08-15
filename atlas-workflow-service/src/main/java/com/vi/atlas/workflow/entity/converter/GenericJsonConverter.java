@@ -79,4 +79,31 @@ public class GenericJsonConverter {
             }
         }
     }
+
+    /** Converts List<StepRecordDto> ↔ JSON CLOB */
+    @Converter(autoApply = false)
+    public static class StepRecordListConverter implements AttributeConverter<List<com.vi.atlas.common.dto.StepRecordDto>, String> {
+
+        @Override
+        public String convertToDatabaseColumn(List<com.vi.atlas.common.dto.StepRecordDto> attribute) {
+            if (attribute == null) return null;
+            try {
+                return MAPPER.writeValueAsString(attribute);
+            } catch (JsonProcessingException e) {
+                log.error("Error serializing StepRecordDto list to JSON", e);
+                return "[]";
+            }
+        }
+
+        @Override
+        public List<com.vi.atlas.common.dto.StepRecordDto> convertToEntityAttribute(String dbData) {
+            if (dbData == null || dbData.trim().isEmpty()) return List.of();
+            try {
+                return MAPPER.readValue(dbData, new TypeReference<List<com.vi.atlas.common.dto.StepRecordDto>>() {});
+            } catch (JsonProcessingException e) {
+                log.error("Error deserializing JSON to StepRecordDto list", e);
+                return List.of();
+            }
+        }
+    }
 }

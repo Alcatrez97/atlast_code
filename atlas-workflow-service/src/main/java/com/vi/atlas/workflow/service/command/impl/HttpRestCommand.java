@@ -29,6 +29,11 @@ public class HttpRestCommand implements WorkflowCommand {
     }
 
     @Override
+    public boolean isExternalIo() {
+        return true;
+    }
+
+    @Override
     public Map<String, Object> execute(Map<String, Object> input) throws Exception {
         String url = getStringParam(input, "url");
         String method = (String) input.getOrDefault("method", "GET");
@@ -39,8 +44,16 @@ public class HttpRestCommand implements WorkflowCommand {
 
         log.info("Executing HttpRestCommand: method={}, url={}, input={}", method, url, input);
 
+        long timeoutSec = 10;
+        if (input.containsKey("timeoutSeconds")) {
+            timeoutSec = Long.parseLong(String.valueOf(input.get("timeoutSeconds")));
+        } else if (input.containsKey("timeout")) {
+            timeoutSec = Long.parseLong(String.valueOf(input.get("timeout")));
+        }
+
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(timeoutSec))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json");
 

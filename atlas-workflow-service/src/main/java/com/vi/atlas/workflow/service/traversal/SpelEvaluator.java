@@ -32,7 +32,12 @@ public class SpelEvaluator {
 
     private static final Logger log = LoggerFactory.getLogger(SpelEvaluator.class);
 
-    private static final ExpressionParser PARSER = new SpelExpressionParser();
+    private static final ExpressionParser PARSER = new SpelExpressionParser(
+            new org.springframework.expression.spel.SpelParserConfiguration(
+                    org.springframework.expression.spel.SpelCompilerMode.IMMEDIATE,
+                    SpelEvaluator.class.getClassLoader()
+            )
+    );
     private static final Map<String, Expression> EXPRESSION_CACHE = new ConcurrentHashMap<>();
 
     // Patterns used by explain() to extract variable names referenced in an expression

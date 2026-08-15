@@ -12,6 +12,7 @@ import com.vi.atlas.workflow.repository.WorkflowDefinitionRepository;
 import com.vi.atlas.workflow.repository.WorkflowVersionRepository;
 import com.vi.atlas.workflow.repository.EventDefinitionRepository;
 import com.vi.atlas.workflow.entity.EventDefinition;
+import com.vi.atlas.workflow.service.traversal.WorkflowGraphCompiler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,9 @@ public class WorkflowService {
 
     @Autowired
     private com.vi.atlas.workflow.repository.BucketRepository bucketRepository;
+
+    @Autowired
+    private WorkflowGraphCompiler graphCompiler;
 
     public WorkflowDefinitionDto createWorkflowDefinition(WorkflowDefinitionDto dto) {
         if (definitionRepository.existsByKey(dto.getKey())) {
@@ -168,6 +172,7 @@ public class WorkflowService {
         version.setDefinition(definitionGraph);
         version.setUpdatedBy("Author");
         version = versionRepository.save(version);
+        graphCompiler.invalidate(versionId);
         return WorkflowMapper.toDto(version);
     }
 
@@ -223,6 +228,10 @@ public class WorkflowService {
 
         version.setUpdatedBy("Publisher"); // Mock role
         version = versionRepository.save(version);
+        graphCompiler.invalidate(versionId);
+        if ("PUBLISHED".equals(targetStatus)) {
+            graphCompiler.getCompiledGraph(version); // Warm the cache ahead-of-time
+        }
         return WorkflowMapper.toDto(version);
     }
 

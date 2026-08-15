@@ -80,11 +80,17 @@ public class EventRoutingService {
 
     /**
      * Routes an inbound event to match and trigger active subscriptions.
+     * Retries automatically with exponential backoff on optimistic lock collisions.
      *
      * @param eventType the inbound event type (e.g. PAYMENT_RECEIVED)
      * @param businessKey the correlation business key (e.g. CAF123)
      * @param payload key-value context attributes of the event
      */
+    @org.springframework.retry.annotation.Retryable(
+            retryFor = { org.springframework.orm.ObjectOptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class },
+            maxAttempts = 3,
+            backoff = @org.springframework.retry.annotation.Backoff(delay = 100, multiplier = 2.0)
+    )
     public void routeEvent(String eventType, String businessKey, Map<String, Object> payload) {
         String correlatedKey = resolveCorrelationKey(eventType, businessKey, payload);
         log.info("Inbound event received - type: {}, originalKey: {}, resolvedKey: {}, payload: {}", 

@@ -38,9 +38,8 @@ public class ExecutionLog {
     @Column(name = "circle_id")
     private Integer circleId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "instance_id", foreignKey = @ForeignKey(name = "fk_exec_log_instance"))
-    private WorkflowInstance workflowInstance;
+    @Column(name = "instance_id", length = 36)
+    private String instanceId;
 
     @Column(name = "status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
@@ -59,17 +58,21 @@ public class ExecutionLog {
     @Column(name = "step_count")
     private Integer stepCount;
 
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
+
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "trace_json", length = 20000)
+    @Convert(converter = GenericJsonConverter.StepRecordListConverter.class)
+    private List<com.vi.atlas.common.dto.StepRecordDto> trace;
+
     @Column(name = "total_duration_ms")
     private long totalDurationMs;
-
-    @Column(name = "error_message", length = 1000)
-    private String errorMessage;
 
     public ExecutionLog() {}
 
@@ -100,15 +103,10 @@ public class ExecutionLog {
     public void setContextId(String contextId) { this.contextId = contextId; }
 
     public String getInstanceId() {
-        return workflowInstance != null ? workflowInstance.getId() : null;
+        return instanceId;
     }
     public void setInstanceId(String instanceId) {
-        if (instanceId == null) {
-            this.workflowInstance = null;
-        } else {
-            this.workflowInstance = new WorkflowInstance();
-            this.workflowInstance.setId(instanceId);
-        }
+        this.instanceId = instanceId;
     }
 
     public String getStatus() { return status != null ? status.name() : null; }

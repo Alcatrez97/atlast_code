@@ -193,12 +193,12 @@ public class CommandNodeExecutor implements NodeExecutor {
         trace.add(step);
         taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
 
-        final WorkflowNodeDto finalNode         = node;
-        final var finalInstance                  = state.instance;
-        final String finalInstanceId             = state.instanceId;
-        final String finalContextId              = state.contextId;
-        final var finalVersion                   = state.version;
-        final Map<String, Object> backgroundCtx  = new HashMap<>(state.context);
+        final WorkflowNodeDto finalNode                       = node;
+        final com.vi.atlas.workflow.entity.WorkflowInstance finalInstance = state.instance;
+        final String finalInstanceId                           = state.instanceId;
+        final String finalContextId                            = state.contextId;
+        final com.vi.atlas.workflow.entity.WorkflowVersion finalVersion   = state.version;
+        final Map<String, Object> backgroundCtx                = new HashMap<>(state.context);
 
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

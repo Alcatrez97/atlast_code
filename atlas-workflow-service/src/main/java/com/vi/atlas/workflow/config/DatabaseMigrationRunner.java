@@ -57,6 +57,7 @@ public class DatabaseMigrationRunner {
             alterColumnLengthIfExist(stmt, "task_instances", "task_instance_pk", 255);
             alterColumnTypeToIntegerIfExist(stmt, "workflow_definitions", "circle_id");
             alterColumnTypeToIntegerIfExist(stmt, "workflow_versions", "circle_id");
+            addColumnIfNotExist(stmt, "workflow_instances", "opt_lock_version", "BIGINT DEFAULT 0");
 
             // Re-enable referential integrity
             try {
@@ -205,6 +206,15 @@ public class DatabaseMigrationRunner {
             );
             stmt.execute(sql);
             log.info("Successfully altered column {}.{} length to {}.", tableName, colName, newLength);
+        }
+    }
+
+    private void addColumnIfNotExist(Statement stmt, String tableName, String colName, String colDefinition) throws Exception {
+        if (tableExists(stmt, tableName) && !columnExists(stmt, tableName, colName)) {
+            log.info("Adding column {}.{} ({})...", tableName, colName, colDefinition);
+            String sql = String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, colName, colDefinition);
+            stmt.execute(sql);
+            log.info("Successfully added column {}.{}.", tableName, colName);
         }
     }
 }

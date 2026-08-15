@@ -190,7 +190,7 @@ public class ExecutionService {
         instance.setStatus("RUNNING");
         instance.setCreatedAt(LocalDateTime.now());
         instance.setUpdatedAt(LocalDateTime.now());
-        instanceRepository.saveAndFlush(instance);
+        instance = instanceRepository.saveAndFlush(instance);
 
         // Prepare execution log entity
         String execId = UUID.randomUUID().toString();
@@ -347,6 +347,11 @@ public class ExecutionService {
     /**
      * Resumes a WAITING workflow instance starting from the recorded currentNodeId.
      */
+    @org.springframework.retry.annotation.Retryable(
+            retryFor = { org.springframework.orm.ObjectOptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class, IllegalStateException.class },
+            maxAttempts = 5,
+            backoff = @org.springframework.retry.annotation.Backoff(delay = 200, multiplier = 1.5)
+    )
     public ExecutionLogDto resume(String instanceId, Map<String, Object> additionalContext) {
         log.info("Resuming workflow instance. instanceId={}, additionalContext={}", instanceId, additionalContext);
         WorkflowInstance instance = instanceRepository.findById(instanceId)
@@ -357,8 +362,9 @@ public class ExecutionService {
         }
 
         // Load active version
-        WorkflowVersion version = versionRepository.findById(instance.getVersionId())
-                .orElseThrow(() -> new IllegalStateException("Version not found: " + instance.getVersionId()));
+        String versionId = instance.getVersionId();
+        WorkflowVersion version = versionRepository.findById(versionId)
+                .orElseThrow(() -> new IllegalStateException("Version not found: " + versionId));
 
         // Auto-resolve any pending BucketExecution for the node we are resuming from
         String currentNodeId = instance.getCurrentNodeId();
@@ -431,7 +437,7 @@ public class ExecutionService {
         LazyContextMap lazyContext = new LazyContextMap(instance.getWorkflowKey(), contextId, context, contextResolutionService);
 
         instance.setStatus("RUNNING");
-        instanceRepository.saveAndFlush(instance);
+        instance = instanceRepository.saveAndFlush(instance);
 
         // Update all previous WAITING execution logs for this instance to COMPLETED
         List<ExecutionLog> previousWaitingLogs = executionRepository.findByInstanceIdAndStatus(instanceId, WorkflowInstanceStatus.WAITING);

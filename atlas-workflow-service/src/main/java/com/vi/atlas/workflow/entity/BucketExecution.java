@@ -27,7 +27,7 @@ public class BucketExecution {
     @JoinColumn(name = "execution_log_id", nullable = false, foreignKey = @ForeignKey(name = "fk_bex_exec_log"))
     private ExecutionLog executionLog;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinColumn(name = "instance_id", foreignKey = @ForeignKey(name = "fk_bex_instance"))
     private WorkflowInstance workflowInstance;
 

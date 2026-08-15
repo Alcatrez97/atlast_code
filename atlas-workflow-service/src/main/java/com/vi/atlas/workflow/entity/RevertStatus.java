@@ -14,13 +14,11 @@ public class RevertStatus {
     @Column(name = "revert_status_pk", length = 36)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workflow_instance_id", nullable = false, foreignKey = @ForeignKey(name = "fk_revert_instance"))
-    private WorkflowInstance workflowInstance;
+    @Column(name = "workflow_instance_id", nullable = false, length = 36)
+    private String workflowInstanceId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "form_id", nullable = false, foreignKey = @ForeignKey(name = "fk_revert_form"))
-    private CustomerForm customerForm;
+    @Column(name = "form_id", nullable = false, length = 100)
+    private String formId;
 
     @Column(name = "bucket_id", length = 100, nullable = false)
     private String bucketId;
@@ -69,29 +67,19 @@ public class RevertStatus {
     }
 
     public String getWorkflowInstanceId() {
-        return workflowInstance != null ? workflowInstance.getId() : null;
+        return workflowInstanceId;
     }
 
     public void setWorkflowInstanceId(String workflowInstanceId) {
-        if (workflowInstanceId == null) {
-            this.workflowInstance = null;
-        } else {
-            this.workflowInstance = new WorkflowInstance();
-            this.workflowInstance.setId(workflowInstanceId);
-        }
+        this.workflowInstanceId = workflowInstanceId;
     }
 
     public String getFormId() {
-        return customerForm != null ? customerForm.getId() : null;
+        return formId;
     }
 
     public void setFormId(String formId) {
-        if (formId == null) {
-            this.customerForm = null;
-        } else {
-            this.customerForm = new CustomerForm();
-            this.customerForm.setId(formId);
-        }
+        this.formId = formId;
     }
 
     public String getBucketId() {

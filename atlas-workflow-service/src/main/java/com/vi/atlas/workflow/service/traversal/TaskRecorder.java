@@ -21,9 +21,6 @@ import java.util.Map;
  * <p>Also maintains the per-traversal in-memory status cache
  * ({@link TraversalContext#localTaskStatuses}) so that repeated calls to
  * {@link #getTaskStatus} within a single traversal pass do not hit the database.
- *
- * <p>Logic copied verbatim from {@code GraphTraversalEngine}:
- * {@code recordTaskStart}, {@code recordTaskCompletion}, {@code getTaskStatus}.
  */
 @Component
 public class TaskRecorder {
@@ -40,7 +37,7 @@ public class TaskRecorder {
     /**
      * Creates a RUNNING {@link TaskInstance} for the given node and persists it.
      *
-     * @param instance the workflow instance (may be {@code null} â€” no-op if so)
+     * @param instance the workflow instance (may be {@code null} — no-op if so)
      * @param node     the node being executed
      * @param input    snapshot of the context map at the moment the task starts
      * @return the persisted {@code TaskInstance}, or {@code null} if instance is null
@@ -191,11 +188,11 @@ public class TaskRecorder {
     }
 
     // -----------------------------------------------------------------------
-    // Step builder (moved here because it closely relates to task/step records)
+    // Step builder
     // -----------------------------------------------------------------------
 
     /**
-     * Convenience factory for {@link StepRecordDto} â€” avoids repeated boilerplate
+     * Convenience factory for {@link StepRecordDto} — avoids repeated boilerplate
      * inside node executors.
      */
     public StepRecordDto buildStep(int idx, WorkflowNodeDto node, String status,

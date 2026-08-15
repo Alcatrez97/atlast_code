@@ -23,6 +23,11 @@ public class MqPublishCommand implements WorkflowCommand {
     }
 
     @Override
+    public boolean isExternalIo() {
+        return true;
+    }
+
+    @Override
     public Map<String, Object> execute(Map<String, Object> input) throws Exception {
         String topic = getStringParam(input, "topic", "kafkaTopic");
         if (topic == null) {

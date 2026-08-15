@@ -43,12 +43,13 @@ public class GraphTraversalEngine {
     @Autowired private ActivationBasedEngine    activationBasedEngine;
     @Autowired private SequentialEngine         sequentialEngine;
     @Autowired private TraversalHelper          traversalHelper;
-
+    @Autowired private WorkflowGraphCompiler     graphCompiler;
     @Autowired @Lazy private EventRoutingService eventRoutingService;
+    @Autowired @org.springframework.beans.factory.annotation.Qualifier("workflowVirtualTaskExecutor") private java.util.concurrent.Executor virtualTaskExecutor;
 
     // ---- ThreadLocal traversal context (shared with collaborators) ----
 
-    /** Public static ThreadLocal so traversal engine collaborators and node executors can access it. */
+    /** Public static ThreadLocal so synchronous traversal engine collaborators can access it on this thread. */
     public static final ThreadLocal<TraversalContext> CURRENT_TRAVERSAL = new ThreadLocal<>();
 
     // -----------------------------------------------------------------------
@@ -126,16 +127,11 @@ public class GraphTraversalEngine {
                 version.getWorkflowDefinition().getKey(), version.getVersion(),
                 instanceId, startNodeId, contextId);
 
-        // ---- Build graph index ----
-        Map<String, WorkflowNodeDto> nodeMap = graph.getNodes().stream()
-                .collect(Collectors.toMap(WorkflowNodeDto::getId, n -> n));
-
-        Map<String, List<WorkflowEdgeDto>> edgesBySource = new HashMap<>();
-        Map<String, List<WorkflowEdgeDto>> edgesByTarget = new HashMap<>();
-        for (WorkflowEdgeDto edge : graph.getEdges()) {
-            edgesBySource.computeIfAbsent(edge.getSource(), k -> new ArrayList<>()).add(edge);
-            edgesByTarget.computeIfAbsent(edge.getTarget(), k -> new ArrayList<>()).add(edge);
-        }
+        // ---- Retrieve pre-compiled immutable graph & SpEL cache ----
+        CompiledWorkflowGraph compiled = graphCompiler.getCompiledGraph(version);
+        Map<String, WorkflowNodeDto> nodeMap = compiled.getNodeMap();
+        Map<String, List<WorkflowEdgeDto>> edgesBySource = compiled.getRawOutgoingEdges();
+        Map<String, List<WorkflowEdgeDto>> edgesByTarget = compiled.getRawIncomingEdges();
 
         // ---- SpEL context ----
         Map<String, Object> root = Map.of("context", context);
@@ -341,20 +337,22 @@ public class GraphTraversalEngine {
                                       WorkflowVersion version,
                                       String eventType) {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
+            CURRENT_TRAVERSAL.remove();
+            TraversalContextHolder.remove();
             try {
-                Thread.sleep(100);
+                Thread.sleep(150);
                 StandardEvaluationContext bgSpel = new StandardEvaluationContext();
                 bgSpel.setVariable("context", backgroundContext);
                 Map<String, Object> commandOutput =
                         executeCommandNode(node, instance, backgroundContext, instanceId, contextId, version, bgSpel);
                 eventRoutingService.routeEvent(eventType, instance.getBusinessKey(), commandOutput);
-                log.info("Completed async command for node: {} and routed resume event.", node.getId());
+                log.info("Completed async command on virtual thread for node: {} and routed resume event.", node.getId());
             } catch (Exception ex) {
                 log.error("Error in async command background task for node: {}", node.getId(), ex);
                 eventRoutingService.routeEvent(eventType, instance.getBusinessKey(),
                         Map.of("error", ex.getMessage()));
             }
-        });
+        }, virtualTaskExecutor);
     }
 
     // -----------------------------------------------------------------------
