@@ -213,6 +213,40 @@ To configure a node for external approval in the visual workflow designer:
 
 ---
 
+## 5.1 Downstream Accessibility of Inbound Event Data
+
+**YES! All data received in the inbound event payload is automatically saved into the runtime `context` and is 100% available to all downstream nodes in the workflow.**
+
+When the inbound event arrives, `ExecutionService.resume()` passes the event payload to `ResumeRouter.applyPayloadMapping()`, which merges the attributes into the workflow's shared execution `context`.
+
+### Downstream Access Patterns:
+
+1. **Downstream Decision & Rule Nodes (SpEL Expressions)**:
+   Downstream rules and edge conditions evaluate mapped or raw payload fields directly:
+   ```text
+   #context['appStatus'] == 'APPROVED'
+   #context['discountAmount'] > 500
+   #context['approvedBy'] != null
+   ```
+
+2. **Downstream Command & REST Nodes (`COMMAND` / `HTTP_REST`)**:
+   Downstream system dispatches (such as updating CRM, calling provision APIs, or publishing Kafka notifications) reference inbound approval variables directly in their parameter templates:
+   ```json
+   {
+     "cafId": "#context['businessKey']",
+     "formStatus": "#context['appStatus']",
+     "approver": "#context['approvedBy']"
+   }
+   ```
+
+3. **Downstream Child Workflows & Sub-Tasks (`SUB_WORKFLOW` / `BUCKET`)**:
+   Subsequent buckets or child sub-workflows inherit the updated context map, passing approver names, timestamps, and notes to downstream task workers.
+
+4. **Live Debugger & Operational Audit Trail**:
+   The inbound event payload is saved in `TaskInstance.outputData` and `WorkflowInstance.serializedContext`, enabling visual inspection of callback data in `atlas-ui`.
+
+---
+
 ## 6. Engine Spring Boot Configuration (`application.yml`)
 
 Ensure the following properties are set in `atlas-workflow-service`:
