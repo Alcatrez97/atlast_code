@@ -6,8 +6,9 @@ import java.util.List;
 public class BucketReadyEvent implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    private String eventId; // Unique outbound Kafka message ID for deduplication
     private String instanceId;
-    private String contextId;
+    private String contextId; // Domain business key (e.g. CAF_ID)
     private String bucketId;
     private String bucketName;
     private String priority;
@@ -15,9 +16,12 @@ public class BucketReadyEvent implements Serializable {
     private Integer circleId;
     private List<String> dependencyBucketIds;
 
-    public BucketReadyEvent() {}
+    public BucketReadyEvent() {
+        this.eventId = java.util.UUID.randomUUID().toString();
+    }
 
     public BucketReadyEvent(String instanceId, String contextId, String bucketId, String bucketName, String priority, Integer slaHours, List<String> dependencyBucketIds, Integer circleId) {
+        this.eventId = java.util.UUID.randomUUID().toString();
         this.instanceId = instanceId;
         this.contextId = contextId;
         this.bucketId = bucketId;
@@ -27,6 +31,12 @@ public class BucketReadyEvent implements Serializable {
         this.dependencyBucketIds = dependencyBucketIds;
         this.circleId = circleId;
     }
+
+    public String getEventId() { return eventId; }
+    public void setEventId(String eventId) { this.eventId = eventId; }
+
+    public String getBusinessKey() { return contextId; }
+    public void setBusinessKey(String businessKey) { this.contextId = businessKey; }
 
     public String getInstanceId() { return instanceId; }
     public void setInstanceId(String instanceId) { this.instanceId = instanceId; }
