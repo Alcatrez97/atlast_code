@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.vi.atlas</groupId>
-        <artifactId>atlas-parent</artifactId>
+        <artifactId>vth-workflow-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>atlas-workflow-service</artifactId>
-    <name>atlas-workflow-service</name>
+    <artifactId>vth-workflow-service</artifactId>
+    <name>vth-workflow-service</name>
     <description>Workflow Definition and Versioning Service for Project Atlas</description>
 
     <dependencies>
@@ -55,7 +55,7 @@
         <!-- Shared Common Library -->
         <dependency>
             <groupId>com.vi.atlas</groupId>
-            <artifactId>atlas-common</artifactId>
+            <artifactId>vth-workflow-common</artifactId>
         </dependency>
 
         <!-- Caffeine Cache for L1 In-Memory Compiled Workflow Graph Caching -->
@@ -142,7 +142,7 @@
                             <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
                             <resources>
                                 <resource>
-                                    <directory>${project.basedir}/../atlas-ui/dist</directory>
+                                    <directory>${project.basedir}/../vth-workflow-ui/dist</directory>
                                     <filtering>false</filtering>
                                 </resource>
                             </resources>

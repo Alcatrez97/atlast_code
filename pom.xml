@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.vi.atlas</groupId>
-    <artifactId>atlas-parent</artifactId>
+    <artifactId>vth-workflow-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>atlas-parent</name>
+    <name>vth-workflow-parent</name>
     <description>Enterprise Workflow Orchestration &amp; Decision Platform</description>
 
     <properties>
@@ -21,8 +21,8 @@
     </properties>
 
     <modules>
-        <module>atlas-common</module>
-        <module>atlas-workflow-service</module>
+        <module>vth-workflow-common</module>
+        <module>vth-workflow-service</module>
     </modules>
 
     <dependencyManagement>
@@ -39,7 +39,7 @@
             <!-- Internal modules -->
             <dependency>
                 <groupId>com.vi.atlas</groupId>
-                <artifactId>atlas-common</artifactId>
+                <artifactId>vth-workflow-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

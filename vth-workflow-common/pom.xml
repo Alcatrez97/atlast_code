@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.vi.atlas</groupId>
-        <artifactId>atlas-parent</artifactId>
+        <artifactId>vth-workflow-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>atlas-common</artifactId>
-    <name>atlas-common</name>
+    <artifactId>vth-workflow-common</artifactId>
+    <name>vth-workflow-common</name>
     <description>Common models, DTOs, and utility classes for Project Atlas</description>
 
     <dependencies>
