@@ -1,110 +1,129 @@
-a# Buckets & Outcomes Backend Architecture
+# Buckets & Outcomes Backend Architecture
 
-This document describes how the human-in-the-loop task queues (referred to as **Buckets** or **Outcomes**) are designed and executed in the project's Spring Boot backend.
+This document describes how human-in-the-loop task queues (referred to as **Buckets** or **Outcomes**) are designed, scheduled, and executed within the `vth-workflow-service` backend module.
 
 ---
 
 ## 1. Database Schema & Entity Modeling
 
-The manual processing logic relies on three core JPA entities:
+The bucket workload queue relies on five core JPA entities mapping to `workflow_` prefixed tables:
 
-*   **`Bucket`** ([Bucket.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/entity/Bucket.java)):
-    Defines the static metadata for validation queues.
-    *   `bucketId`: Unique business key (e.g. `OBCC`, `FOIR`).
-    *   `priority`: Urgency tier (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
-    *   `slaHours`: Time limit before SLA is breached.
-    *   `ownerGroup`: Responsible operations team.
-*   **`BucketExecution`** ([BucketExecution.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/entity/BucketExecution.java)):
-    Represents an active or resolved workload item in the queue.
-    *   `instanceId`: Associates the workload item with the parent workflow execution.
-    *   `status`: Current state (`PENDING`, `IN_REVIEW`, `RESOLVED`).
-    *   `slaBreached`: Flag calculated dynamically on query (if elapsed time > SLA hours).
-*   **`RevertStatus`** ([RevertStatus.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/entity/RevertStatus.java)):
-    Provides an audit timeline of manual stages. Revert steps are linked sequentially (via `previousStepId`) to reconstruct the complete chronological manual progression.
+* **`Bucket`** ([Bucket.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/Bucket.java)):
+  Defines static queue metadata.
+  - Table: `workflow_buckets`
+  - `bucketId`: Unique business key (e.g. `OBCC`, `PREMIUM_APPROVAL`, `FOIR`).
+  - `priority`: Urgency tier (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+  - `slaHours`: Time threshold in hours before SLA breach is flagged.
+  - `ownerGroup`: Responsible operations team.
+
+* **`BucketExecution`** ([BucketExecution.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/BucketExecution.java)):
+  Represents an active or resolved workload item in the operations queue.
+  - Table: `workflow_bucket_executions`
+  - `instanceId`: Associates the item with parent [`WorkflowInstance`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/WorkflowInstance.java).
+  - `status`: Current queue state (`PENDING`, `IN_REVIEW`, `RESOLVED`).
+  - `assignedTo`: Locked manager/operator ID claiming the item.
+  - `slaBreached`: Calculated dynamically on query if `(createdAt + slaHours < now)`.
+
+* **`EventSubscription`** ([EventSubscription.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/EventSubscription.java)):
+  Registers the wait-state correlation record.
+  - Table: `workflow_event_subscriptions`
+  - `businessKey`: Primary domain key (e.g. `CAF_ID`).
+  - `eventType`: Matched event key (e.g. `PREMIUM_APPROVAL_COMPLETED`).
+  - `status`: `ACTIVE`, `TRIGGERED`, `CANCELLED`.
+
+* **`RevertStatus`** ([RevertStatus.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/RevertStatus.java)):
+  Provides audit timeline and sequential tracking for multi-step manual bucket transitions.
+  - Table: `workflow_revert_status`
+
+* **`TaskInstance`** ([TaskInstance.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/entity/TaskInstance.java)):
+  Tracks task execution step details.
+  - Table: `workflow_task_instances`
 
 ---
 
-## 2. Execution & Traversal Flow
+## 2. Execution & Outbound Notification Flow
 
-The graph traversal engine processes the pipeline definition node-by-node. Below is the sequence when a workflow execution encounters a bucket.
+When graph traversal encounters a node of type `BUCKET`:
 
 ```mermaid
 sequenceDiagram
     participant Traversal as GraphTraversalEngine
+    participant Listener as BucketEventListener
     participant ExecService as ExecutionService
-    participant DB as H2 Database
+    participant Kafka as Kafka Broker (workflow-bucket-tasks)
+    participant DB as Oracle / PostgreSQL Database
     
-    Traversal->>Traversal: Node matches type == "BUCKET"
-    activate Traversal
-    Note over Traversal: Set Step status = "WAITING"
-    
+    Traversal->>Traversal: Node type == "BUCKET"
+    Traversal->>DB: Insert ACTIVE EventSubscription (workflow_event_subscriptions)
     Traversal->>DB: Update CustomerForm status to "<bucketId> Pending"
-    Traversal->>DB: Insert PENDING RevertStatus (chains via previousStepId)
+    Traversal->>DB: Insert PENDING RevertStatus
     
     Traversal-->>ExecService: Return suspended TraversalResult
-    deactivate Traversal
     
-    activate ExecService
-    ExecService->>DB: Set WorkflowInstance status = "WAITING"
-    ExecService->>DB: Save current context variables to instance
-    ExecService->>DB: Insert PENDING BucketExecution (Workload queue item)
-    ExecService-->>ExecService: Halt active thread
-    deactivate ExecService
+    ExecService->>DB: Update WorkflowInstance status = "WAITING"
+    ExecService->>DB: Insert PENDING BucketExecution (workflow_bucket_executions)
+    ExecService->>Listener: Broadcast BucketReadySpringEvent
+    
+    Listener->>Kafka: Publish BucketReadyEvent (eventId, businessKey, bucketId)
+    ExecService-->>ExecService: Release Thread & Return (Non-blocking)
 ```
 
-### Detailed Steps:
-1.  **Encountering the Node**: The [GraphTraversalEngine.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/service/GraphTraversalEngine.java) detects `node.getType() == "BUCKET"`.
-2.  **Updating Form & Revert Registry**:
-    *   The engine looks up the `CustomerForm` based on the context's `formId` and sets its status to `"<bucketId> Pending"` (e.g. `OBCC Pending`).
-    *   It creates a `RevertStatus` record in the `PENDING` state and links it to any previously completed revert steps.
-3.  **Halting Thread & Creating Queue Item**:
-    *   The engine stops walking and returns a suspended result.
-    *   The [ExecutionService.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/service/ExecutionService.java) commits the current variables to the database, transitions the parent `WorkflowInstance` and `ExecutionLog` states to `WAITING`, and auto-creates a pending `BucketExecution` workload record.
+### Detailed Sequence:
+1. **Encountering Node**: [`GraphTraversalEngine.java`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/service/traversal/GraphTraversalEngine.java) detects `node.getType() == "BUCKET"`.
+2. **Subscription & Form Update**:
+   - Inserts record into `workflow_event_subscriptions` with `businessKey = context.businessKey` and `status = 'ACTIVE'`.
+   - Sets `workflow_customer_forms` status to `"<bucketId> Pending"`.
+3. **Outbound Kafka Dispatch**:
+   - [`BucketEventListener.java`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/event/publisher/BucketEventListener.java) publishes [`BucketReadyEvent`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-common/src/main/java/com/vi/atlas/common/dto/BucketReadyEvent.java) to topic `workflow-bucket-tasks`.
+   - Payload includes unique `eventId` (UUID for consumer deduplication), `instanceId`, `businessKey`, `bucketId`, `priority`, and `slaHours`.
+4. **Non-Blocking Suspension**:
+   - Updates `workflow_instances.status` to `WAITING`.
+   - Inserts `workflow_bucket_executions` workload item in state `PENDING`.
+   - Thread releases CPU and DB connections immediately.
 
 ---
 
-## 3. Resolving and Resuming
+## 3. Resolving and Resuming Workflows
 
-When manual approval is submitted (e.g. via the Customer Forms Simulator panel):
+Resolution can occur via **Kafka Event** (Production Domains) or **REST API** (Ops/Admin Tools):
 
 ```mermaid
 sequenceDiagram
-    actor User as Manual Operator / Simulator
-    participant Listener as FormApprovalListener
+    actor Subsystem as External System / Manager UI
+    participant Handler as KafkaEventConsumer / EventController
+    participant Routing as EventRoutingService
     participant ExecService as ExecutionService
     participant Traversal as GraphTraversalEngine
-    participant DB as H2 Database
+    participant DB as Oracle / PostgreSQL Database
 
-    User->>DB: Update Form Status (Approve / Reject)
-    User->>Listener: Broadcast FormApprovalEvent
+    Subsystem->>Handler: Send Event (Kafka topic: workflow-events / REST POST: /resolve)
+    Handler->>Routing: routeEvent(eventType, businessKey, payload)
     
-    activate Listener
-    Listener->>DB: Transition RevertStatus to "COMPLETED"
-    Listener->>DB: Transition BucketExecution to "RESOLVED" (saves notes)
+    Routing->>DB: Query workflow_event_subscriptions by (businessKey + eventType)
+    Routing->>DB: Update EventSubscription status -> "TRIGGERED"
+    Routing->>DB: Update BucketExecution status -> "RESOLVED"
+    Routing->>DB: Update TaskInstance status -> "COMPLETED"
     
-    Listener->>ExecService: Invoke resume(instanceId, additionalContext)
-    deactivate Listener
+    Routing->>ExecService: Invoke resume(instanceId, payload)
+    ExecService->>DB: Update WorkflowInstance status -> "RUNNING"
+    ExecService->>Routing: Apply payloadMapping / Merge into TraversalContext
     
-    activate ExecService
-    ExecService->>DB: Set WorkflowInstance status = "RUNNING"
-    ExecService->>Traversal: Invoke traverse(starting at suspended node)
-    
-    activate Traversal
-    Traversal->>Traversal: Evaluate outgoing conditional edges
-    Traversal->>Traversal: Walk remaining graph nodes
-    Traversal-->>ExecService: Return final TraversalResult
-    deactivate Traversal
-    
-    ExecService->>DB: Save completed WorkflowInstance & ExecutionLog
-    deactivate ExecService
+    ExecService->>Traversal: Resume graph traversal from suspended BUCKET node
+    Traversal->>Traversal: Evaluate outgoing SpEL conditions (#context['status'] == 'APPROVED')
+    Traversal-->>ExecService: Execution Completed / Suspended at next node
 ```
 
-### Detailed Steps:
-1.  **Triggering Approval**: Form action fires a `FormApprovalEvent`.
-2.  **Resolving Workload Status**:
-    *   The [FormApprovalListener.java](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/atlas-workflow-service/src/main/java/com/enterprise/atlas/workflow/event/FormApprovalListener.java) marks the pending `RevertStatus` as `COMPLETED`.
-    *   It updates the matching `BucketExecution` queue row to `RESOLVED`, adding resolution notes and the author identity.
-3.  **Resuming Execution**:
-    *   The listener calls `ExecutionService.resume()`.
-    *   The service sets `WorkflowInstance` to `RUNNING` and resumes traversal starting **exactly from the suspended BUCKET node**.
-    *   The engine evaluates the outgoing conditional edges of the BUCKET node using the updated context variables, selects the matched path, and traverses the rest of the graph to completion.
+### Detailed Sequence:
+1. **Approval Submission**:
+   - **Production System**: Publishes completion message to Kafka topic `workflow-events`.
+   - **Ops / Support Web App**: Calls REST endpoint `POST /api/v1/buckets/executions/{id}/resolve`.
+2. **Correlation & State Transition**:
+   - [`EventRoutingService.java`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/service/EventRoutingService.java) queries `workflow_event_subscriptions` by `business_key` + `event_type`.
+   - Updates entity statuses:
+     - `workflow_event_subscriptions` $\rightarrow$ `TRIGGERED`
+     - `workflow_bucket_executions` $\rightarrow$ `RESOLVED`
+     - `workflow_task_instances` $\rightarrow$ `COMPLETED`
+3. **Resumption & Downstream Access**:
+   - [`ExecutionService.java`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/service/ExecutionService.java) sets `WorkflowInstance` to `RUNNING`.
+   - Merges inbound event payload into `TraversalContext`.
+   - Resumes [`GraphTraversalEngine`](file:///c:/Users/hemant/Desktop/Projects/state-machine-engine/vth-workflow-service/src/main/java/com/vi/atlas/workflow/service/traversal/GraphTraversalEngine.java) traversal from the `BUCKET` node, evaluating downstream SpEL edge rules.

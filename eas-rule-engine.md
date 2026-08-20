@@ -5231,7 +5231,7 @@ The production platform architecture consists of an integrated multi-tier stack:
 
 ```text
                +---------------------------------------------------+
-               | React + XYFlow Canvas UI (atlas-ui)              |
+               | React + XYFlow Canvas UI (vth-workflow-ui)         |
                +-------------------------+-------------------------+
                                          |
                                          v
