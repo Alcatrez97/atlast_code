@@ -52,7 +52,59 @@ The **Atlas Enterprise Workflow & Decision Subsystem** is a metadata-configurabl
 
 The subsystem achieves sub-millisecond execution and high throughput through four lightweight architectural layers:
 
-```text
+```mermaid
+erDiagram
+    WORKFLOW_DEFINITIONS ||--o{ WORKFLOW_VERSIONS : "has versions"
+    WORKFLOW_VERSIONS ||--o{ WORKFLOW_INSTANCES : "instantiates"
+    WORKFLOW_INSTANCES ||--o{ WORKFLOW_TASK_INSTANCES : "accumulates"
+    WORKFLOW_INSTANCES ||--o{ WORKFLOW_EVENT_SUBSCRIPTIONS : "registers"
+    WORKFLOW_INSTANCES ||--o{ WORKFLOW_EXECUTION_LOGS : "records"
+
+    WORKFLOW_INSTANCES {
+        string id PK
+        string workflow_definition_id
+        string workflow_version_id
+        string business_key "e.g. CAF_ID / MSISDN"
+        string status "RUNNING | WAITING | COMPLETED | FAILED"
+        clob serialized_context "JSON Context Map"
+        clob runtime_graph "Active Frontier JSON"
+        bigint opt_lock_version "@Version Optimistic Lock"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    WORKFLOW_TASK_INSTANCES {
+        string id PK
+        string workflow_instance_id
+        string node_id
+        string task_type "SYNC_RULE | COMMAND | ASYNC_WAIT | BUCKET"
+        string status "RUNNING | COMPLETED | FAILED | SUSPENDED"
+        clob input_payload
+        clob output_payload
+        timestamp started_at
+        timestamp completed_at
+    }
+
+    WORKFLOW_EVENT_SUBSCRIPTIONS {
+        string id PK
+        string business_key "CAF_ID Correlation"
+        string event_type "e.g. PAYMENT_RECEIVED, COMMAND_RESUME_cmd1"
+        clob filter_attributes
+        string target_node_id
+        string status "ACTIVE | FULFILLED | CANCELLED"
+    }
+
+    WORKFLOW_EXECUTION_LOGS {
+        string id PK
+        string instance_id "Decoupled String ID"
+        string node_id
+        string step_type
+        string status
+        clob details
+        timestamp timestamp
+    }
+```
+
 +-----------------------------------------------------------------------------------+
 | 1. VISUAL DESIGNER & MANAGEMENT LAYER                                             |
 |    - Web-based Drag-and-Drop Canvas (React + XYFlow)                              |

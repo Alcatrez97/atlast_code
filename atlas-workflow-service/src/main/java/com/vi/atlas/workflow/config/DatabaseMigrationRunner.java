@@ -33,19 +33,19 @@ public class DatabaseMigrationRunner {
             }
 
             // 1. Rename primary key 'id' columns if they exist
-            renameColumnIfExist(stmt, "buckets", "id", "bucket_pk");
-            renameColumnIfExist(stmt, "bucket_executions", "id", "bucket_execution_pk");
-            renameColumnIfExist(stmt, "context_fields", "id", "context_field_pk");
-            renameColumnIfExist(stmt, "context_schemas", "id", "context_schema_pk");
-            renameColumnIfExist(stmt, "customer_forms", "id", "customer_form_pk");
-            renameColumnIfExist(stmt, "execution_logs", "id", "execution_log_pk");
-            renameColumnIfExist(stmt, "integration_registry", "id", "integration_pk");
-            renameColumnIfExist(stmt, "revert_status", "id", "revert_status_pk");
-            renameColumnIfExist(stmt, "rules", "id", "rule_pk");
+            renameColumnIfExist(stmt, "workflow_buckets", "id", "bucket_pk");
+            renameColumnIfExist(stmt, "workflow_bucket_executions", "id", "bucket_execution_pk");
+            renameColumnIfExist(stmt, "workflow_context_fields", "id", "context_field_pk");
+            renameColumnIfExist(stmt, "workflow_context_schemas", "id", "context_schema_pk");
+            renameColumnIfExist(stmt, "workflow_customer_forms", "id", "customer_form_pk");
+            renameColumnIfExist(stmt, "workflow_execution_logs", "id", "execution_log_pk");
+            renameColumnIfExist(stmt, "workflow_integration_registry", "id", "integration_pk");
+            renameColumnIfExist(stmt, "workflow_revert_status", "id", "revert_status_pk");
+            renameColumnIfExist(stmt, "workflow_rules", "id", "rule_pk");
             renameColumnIfExist(stmt, "workflow_definitions", "id", "workflow_definition_pk");
             renameColumnIfExist(stmt, "workflow_instances", "id", "workflow_instance_pk");
             renameColumnIfExist(stmt, "workflow_versions", "id", "workflow_version_pk");
-            renameColumnIfExist(stmt, "event_definitions", "id", "event_definition_pk");
+            renameColumnIfExist(stmt, "workflow_event_definitions", "id", "event_definition_pk");
 
             // 2. Clean up orphaned foreign key data to allow FK constraint creation
             cleanOrphanedData(stmt);
@@ -53,8 +53,8 @@ public class DatabaseMigrationRunner {
             // 3. Heal historical bucket execution data inconsistencies
             healWorkloadDataInconsistency(stmt);
 
-            // 4. Alter column length of task_instances.task_instance_pk and ensure circle_id columns are INTEGER
-            alterColumnLengthIfExist(stmt, "task_instances", "task_instance_pk", 255);
+            // 4. Alter column length of workflow_task_instances.task_instance_pk and ensure circle_id columns are INTEGER
+            alterColumnLengthIfExist(stmt, "workflow_task_instances", "task_instance_pk", 255);
             alterColumnTypeToIntegerIfExist(stmt, "workflow_definitions", "circle_id");
             alterColumnTypeToIntegerIfExist(stmt, "workflow_versions", "circle_id");
             addColumnIfNotExist(stmt, "workflow_instances", "opt_lock_version", "BIGINT DEFAULT 0");
@@ -97,20 +97,20 @@ public class DatabaseMigrationRunner {
         log.info("Cleaning up orphaned records before constraint creation...");
 
         // Helper to check table existence
-        autoCleanOrphans(stmt, "bucket_executions", "execution_log_id", "execution_logs", "execution_log_pk");
-        autoCleanOrphans(stmt, "bucket_executions", "instance_id", "workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "workflow_bucket_executions", "execution_log_id", "workflow_execution_logs", "execution_log_pk");
+        autoCleanOrphans(stmt, "workflow_bucket_executions", "instance_id", "workflow_instances", "workflow_instance_pk");
         autoCleanOrphans(stmt, "workflow_instances", "version_id", "workflow_versions", "workflow_version_pk");
-        autoCleanOrphans(stmt, "execution_logs", "version_id", "workflow_versions", "workflow_version_pk");
-        autoCleanOrphans(stmt, "execution_logs", "instance_id", "workflow_instances", "workflow_instance_pk");
-        autoCleanOrphans(stmt, "revert_status", "workflow_instance_id", "workflow_instances", "workflow_instance_pk");
-        autoCleanOrphans(stmt, "revert_status", "form_id", "customer_forms", "customer_form_pk");
+        autoCleanOrphans(stmt, "workflow_execution_logs", "version_id", "workflow_versions", "workflow_version_pk");
+        autoCleanOrphans(stmt, "workflow_execution_logs", "instance_id", "workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "workflow_revert_status", "workflow_instance_id", "workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "workflow_revert_status", "form_id", "workflow_customer_forms", "customer_form_pk");
 
         // Clean context_fields integration_id
-        if (tableExists(stmt, "context_fields") && tableExists(stmt, "integration_registry")) {
-            log.info("Cleaning up invalid integration_id references in context_fields...");
-            stmt.execute("UPDATE context_fields SET integration_id = NULL " +
+        if (tableExists(stmt, "workflow_context_fields") && tableExists(stmt, "workflow_integration_registry")) {
+            log.info("Cleaning up invalid integration_id references in workflow_context_fields...");
+            stmt.execute("UPDATE workflow_context_fields SET integration_id = NULL " +
                          "WHERE integration_id IS NOT NULL " +
-                         "AND integration_id NOT IN (SELECT integration_pk FROM integration_registry)");
+                         "AND integration_id NOT IN (SELECT integration_pk FROM workflow_integration_registry)");
         }
     }
 
@@ -139,9 +139,9 @@ public class DatabaseMigrationRunner {
     }
 
     private void healWorkloadDataInconsistency(Statement stmt) throws Exception {
-        if (tableExists(stmt, "bucket_executions") && tableExists(stmt, "workflow_instances")) {
+        if (tableExists(stmt, "workflow_bucket_executions") && tableExists(stmt, "workflow_instances")) {
             log.info("Healing bucket executions for completed workflow instances...");
-            String sql1 = "UPDATE bucket_executions " +
+            String sql1 = "UPDATE workflow_bucket_executions " +
                           "SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP(), resolved_by = 'DataMigrationFix', " +
                           "    resolution_notes = 'Auto-resolved: matching workflow instance is completed' " +
                           "WHERE status <> 'RESOLVED' " +
@@ -152,14 +152,14 @@ public class DatabaseMigrationRunner {
             }
         }
 
-        if (tableExists(stmt, "bucket_executions") && tableExists(stmt, "revert_status")) {
+        if (tableExists(stmt, "workflow_bucket_executions") && tableExists(stmt, "workflow_revert_status")) {
             log.info("Healing bucket executions for completed reverts...");
-            String sql2 = "UPDATE bucket_executions be " +
+            String sql2 = "UPDATE workflow_bucket_executions be " +
                           "SET be.status = 'RESOLVED', be.resolved_at = CURRENT_TIMESTAMP(), be.resolved_by = 'DataMigrationFix', " +
                           "    be.resolution_notes = 'Auto-resolved: matching revert status is completed' " +
                           "WHERE be.status <> 'RESOLVED' " +
                           "AND EXISTS (" +
-                          "    SELECT 1 FROM revert_status rs " +
+                          "    SELECT 1 FROM workflow_revert_status rs " +
                           "    WHERE rs.workflow_instance_id = be.instance_id " +
                           "      AND rs.bucket_id = be.bucket_id " +
                           "      AND rs.status = 'COMPLETED'" +

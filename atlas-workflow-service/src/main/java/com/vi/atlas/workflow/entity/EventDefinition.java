@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
  * Reusable event definition in the registry.
  */
 @Entity
-@Table(name = "event_definitions", indexes = {
+@Table(name = "workflow_event_definitions", indexes = {
     @Index(name = "idx_event_def_key", columnList = "event_key", unique = true),
     @Index(name = "idx_event_def_active", columnList = "active")
 })

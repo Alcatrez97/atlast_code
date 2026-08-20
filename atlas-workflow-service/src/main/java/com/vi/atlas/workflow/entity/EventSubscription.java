@@ -9,7 +9,7 @@ import java.util.Map;
  * Entity representing an active wait-state subscription for an external event.
  */
 @Entity
-@Table(name = "event_subscriptions", indexes = {
+@Table(name = "workflow_event_subscriptions", indexes = {
     @Index(name = "idx_event_sub_bkey", columnList = "business_key"),
     @Index(name = "idx_event_sub_type", columnList = "event_type"),
     @Index(name = "idx_event_sub_status", columnList = "status"),

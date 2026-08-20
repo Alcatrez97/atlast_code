@@ -6,7 +6,7 @@ import jakarta.persistence.*;
  * A single typed field definition within a ContextSchema.
  */
 @Entity
-@Table(name = "context_fields", indexes = {
+@Table(name = "workflow_context_fields", indexes = {
     @Index(name = "idx_ctx_field_schema", columnList = "schema_id")
 })
 public class ContextField {

@@ -11,7 +11,7 @@ import java.util.Map;
  * Persists a single workflow execution run with its full step-by-step trace.
  */
 @Entity
-@Table(name = "execution_logs", indexes = {
+@Table(name = "workflow_execution_logs", indexes = {
     @Index(name = "idx_exec_wf_key", columnList = "workflow_key"),
     @Index(name = "idx_exec_status", columnList = "status"),
     @Index(name = "idx_exec_started_at", columnList = "started_at")

@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
  * Persisted registry configuration for external endpoints/datasources.
  */
 @Entity
-@Table(name = "integration_registry", indexes = {
+@Table(name = "workflow_integration_registry", indexes = {
     @Index(name = "idx_int_key", columnList = "integration_key", unique = true)
 })
 public class IntegrationRegistry {

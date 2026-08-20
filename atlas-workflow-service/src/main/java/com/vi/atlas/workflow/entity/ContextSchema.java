@@ -9,7 +9,7 @@ import java.util.List;
  * Context schema defining the typed field contract for a workflow's execution payload.
  */
 @Entity
-@Table(name = "context_schemas", indexes = {
+@Table(name = "workflow_context_schemas", indexes = {
     @Index(name = "idx_ctx_schema_key", columnList = "workflow_key", unique = true)
 })
 public class ContextSchema {

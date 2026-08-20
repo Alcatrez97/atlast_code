@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "revert_status", indexes = {
+@Table(name = "workflow_revert_status", indexes = {
     @Index(name = "idx_revert_inst_id", columnList = "workflow_instance_id"),
     @Index(name = "idx_revert_form_id", columnList = "form_id")
 })

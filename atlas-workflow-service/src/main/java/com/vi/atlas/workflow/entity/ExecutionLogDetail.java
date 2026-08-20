@@ -8,7 +8,7 @@ import jakarta.persistence.*;
  * from the lightweight execution_logs summary table for high query performance.
  */
 @Entity
-@Table(name = "execution_log_details")
+@Table(name = "workflow_execution_log_details")
 public class ExecutionLogDetail {
 
     @Id

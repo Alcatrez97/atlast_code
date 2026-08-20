@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "customer_forms")
+@Table(name = "workflow_customer_forms")
 public class CustomerForm {
 
     @Id

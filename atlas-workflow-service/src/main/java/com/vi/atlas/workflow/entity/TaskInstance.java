@@ -9,7 +9,7 @@ import java.util.Map;
  * Entity representing an individual task activity executed within a workflow instance.
  */
 @Entity
-@Table(name = "task_instances", indexes = {
+@Table(name = "workflow_task_instances", indexes = {
     @Index(name = "idx_task_inst_parent", columnList = "instance_id"),
     @Index(name = "idx_task_inst_status", columnList = "status"),
     @Index(name = "idx_task_inst_type", columnList = "task_type")

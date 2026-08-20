@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
  * SLA breach is computed based on slaHours + createdAt vs. now.
  */
 @Entity
-@Table(name = "bucket_executions", indexes = {
+@Table(name = "workflow_bucket_executions", indexes = {
     @Index(name = "idx_bex_bucket_id", columnList = "bucket_id"),
     @Index(name = "idx_bex_status", columnList = "status"),
     @Index(name = "idx_bex_workflow_key", columnList = "workflow_key"),
