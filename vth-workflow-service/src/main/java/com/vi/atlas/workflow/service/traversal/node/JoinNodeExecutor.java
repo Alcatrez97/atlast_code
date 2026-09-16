@@ -73,7 +73,8 @@ public class JoinNodeExecutor implements NodeExecutor {
             step.setStatus("WAITING");
             step.setNotes("Join convergence waiting. Not all incoming branches have arrived yet.");
             taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
-            return NodeExecutionResult.COMPLETED;  // frontier not advanced; re-evaluated later
+            state.suspendedNodes.add(node);
+            return NodeExecutionResult.suspended();
         }
     }
 }

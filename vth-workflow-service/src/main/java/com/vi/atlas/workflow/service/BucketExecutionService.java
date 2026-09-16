@@ -38,6 +38,9 @@ public class BucketExecutionService {
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
+    @Autowired
+    private com.vi.atlas.workflow.repository.WorkflowInstanceRepository instanceRepository;
+
     /**
      * Auto-called by ExecutionService when a workflow routes to a BUCKET node.
      * Creates a new BucketExecution record in PENDING state.
@@ -47,7 +50,12 @@ public class BucketExecutionService {
         BucketExecution bex = new BucketExecution();
         bex.setId(UUID.randomUUID().toString());
         bex.setExecutionLogId(executionLog.getId());
-        bex.setInstanceId(executionLog.getInstanceId());
+        if (executionLog.getInstanceId() != null) {
+            instanceRepository.findById(executionLog.getInstanceId()).ifPresentOrElse(
+                    bex::setWorkflowInstance,
+                    () -> bex.setInstanceId(executionLog.getInstanceId())
+            );
+        }
         bex.setWorkflowKey(executionLog.getWorkflowKey());
 
         if (bucketOpt.isEmpty()) {

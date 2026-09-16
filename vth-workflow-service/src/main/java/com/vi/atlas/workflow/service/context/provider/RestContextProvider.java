@@ -53,7 +53,7 @@ public class RestContextProvider implements ContextProvider {
 
             // Interpolate body
             String body = null;
-            if ("POST".equalsIgnoreCase(integration.getMethod()) && integration.getRequestTemplate() != null) {
+            if (!"GET".equalsIgnoreCase(integration.getMethod()) && !"DELETE".equalsIgnoreCase(integration.getMethod()) && integration.getRequestTemplate() != null) {
                 body = interpolate(integration.getRequestTemplate(), currentContext);
             }
 

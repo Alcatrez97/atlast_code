@@ -457,6 +457,23 @@ CREATE TABLE workflow_customer_forms (
 CREATE INDEX idx_caf_msisdn ON workflow_customer_forms(msisdn);
 CREATE INDEX idx_caf_status ON workflow_customer_forms(status);
 
+
+-- 17. WORKFLOW STAGED PAYLOADS TABLE (PRE-SUBMISSION / OUT-OF-ORDER STAGING)
+CREATE TABLE workflow_staged_payloads (
+    staged_payload_pk       VARCHAR2(36 CHAR) NOT NULL,
+    business_key            VARCHAR2(100 CHAR) NOT NULL,
+    payload_type            VARCHAR2(50 CHAR) NOT NULL, -- DOCUMENTS, CAF, FAMILY_GROUP
+    payload                 CLOB,
+    status                  VARCHAR2(30 CHAR) DEFAULT 'STAGED' NOT NULL, -- STAGED, CONSUMED
+    circle_id               NUMBER(10,0),
+    created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_staged_payload PRIMARY KEY (staged_payload_pk)
+);
+
+CREATE INDEX idx_staged_biz_key ON workflow_staged_payloads(business_key);
+CREATE INDEX idx_staged_type ON workflow_staged_payloads(payload_type);
+
 COMMIT;
 -- =============================================================================
 -- END OF ORACLE DDL SCRIPT

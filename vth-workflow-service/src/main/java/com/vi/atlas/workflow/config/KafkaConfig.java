@@ -32,13 +32,19 @@ public class KafkaConfig {
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
 
+    @Value("${spring.kafka.admin.auto-create:false}")
+    private boolean autoCreateTopics;
+
     // --- Kafka Admin Configuration ---
     // This tells Spring Boot where to connect to automatically create your topics
     @Bean
     public KafkaAdmin kafkaAdmin() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        return new KafkaAdmin(configs);
+        KafkaAdmin admin = new KafkaAdmin(configs);
+        admin.setFatalIfBrokerNotAvailable(false);
+        admin.setAutoCreate(autoCreateTopics);
+        return admin;
     }
 
     // --- Topic Declarations ---
@@ -106,7 +112,7 @@ public class KafkaConfig {
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>();
-        jsonDeserializer.addTrustedPackages("com.vi.atlas.common.dto");
+        jsonDeserializer.addTrustedPackages("*");
 
         return new DefaultKafkaConsumerFactory<>(
                 config,

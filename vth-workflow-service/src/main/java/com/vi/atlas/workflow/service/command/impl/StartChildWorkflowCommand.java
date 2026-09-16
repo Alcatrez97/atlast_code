@@ -33,6 +33,54 @@ public class StartChildWorkflowCommand implements WorkflowCommand {
     }
 
     @Override
+    public String getDisplayName() {
+        return "Start Child Workflow";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Spawns an asynchronous or synchronous child sub-workflow instance with input and output context mapping.";
+    }
+
+    @Override
+    public String getCategory() {
+        return "Workflow";
+    }
+
+    @Override
+    public java.util.List<com.vi.atlas.workflow.dto.CommandParameterDto> getParameters() {
+        com.vi.atlas.workflow.dto.CommandParameterDto workflowParam = new com.vi.atlas.workflow.dto.CommandParameterDto(
+                "childWorkflowKey",
+                "Child Workflow Key",
+                "select",
+                true,
+                "",
+                "Key of the target child workflow definition to execute"
+        );
+        workflowParam.setDataSource("WORKFLOWS");
+
+        return java.util.List.of(
+                workflowParam,
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "inputMapping",
+                        "Input Mapping (JSON)",
+                        "json",
+                        false,
+                        "{}",
+                        "JSON mapping parent context variables to child input variables"
+                ),
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "outputMapping",
+                        "Output Mapping (JSON)",
+                        "json",
+                        false,
+                        "{}",
+                        "JSON mapping child output variables into parent context"
+                )
+        );
+    }
+
+    @Override
     public Map<String, Object> execute(Map<String, Object> input) throws Exception {
         String parentInstanceId = (String) input.get("_instanceId");
         String childWorkflowKey = getStringParam(input, "childWorkflowKey", "workflow");

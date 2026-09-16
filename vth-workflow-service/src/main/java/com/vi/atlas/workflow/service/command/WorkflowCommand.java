@@ -17,6 +17,36 @@ public interface WorkflowCommand {
     }
 
     /**
+     * Human-readable display label for designer UI.
+     */
+    default String getDisplayName() {
+        String type = getCommandType();
+        if (type == null) return "Command";
+        return type.replace('_', ' ');
+    }
+
+    /**
+     * Description of the command function.
+     */
+    default String getDescription() {
+        return "";
+    }
+
+    /**
+     * Classification category (e.g. "Integration", "Lifecycle", "Workflow", "Event", "Messaging", "Custom").
+     */
+    default String getCategory() {
+        return "General";
+    }
+
+    /**
+     * Descriptors for configurable parameters.
+     */
+    default java.util.List<com.vi.atlas.workflow.dto.CommandParameterDto> getParameters() {
+        return java.util.Collections.emptyList();
+    }
+
+    /**
      * Executes the custom logic associated with this command type.
      *
      * @param input mapped data from global context and static node attributes.

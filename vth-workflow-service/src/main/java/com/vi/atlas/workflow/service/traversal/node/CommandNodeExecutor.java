@@ -225,13 +225,29 @@ public class CommandNodeExecutor implements NodeExecutor {
                                      Map<String, Object> context,
                                      Map<String, Object> commandOutput) {
         Object outputMappingObj = node.getData() != null ? node.getData().get("outputMapping") : null;
-        if (!(outputMappingObj instanceof Map)) return;
+        if (!(outputMappingObj instanceof Map) || commandOutput == null) return;
         @SuppressWarnings("unchecked")
         Map<?, ?> outputMap = (Map<?, ?>) outputMappingObj;
         for (Map.Entry<?, ?> entry : outputMap.entrySet()) {
-            String outputKey       = String.valueOf(entry.getKey());
-            String targetContextKey = String.valueOf(entry.getValue());
-            Object val = commandOutput.get(outputKey);
+            String k = String.valueOf(entry.getKey());
+            String v = String.valueOf(entry.getValue());
+
+            String responseKey;
+            String targetContextKey;
+
+            // Support both "responseKey": "context.targetVar" AND "targetVar": "responseKey"
+            if (v.startsWith("context.") || (!commandOutput.containsKey(v) && commandOutput.containsKey(k))) {
+                responseKey = k;
+                targetContextKey = v;
+            } else if (k.startsWith("context.") || (!commandOutput.containsKey(k) && commandOutput.containsKey(v))) {
+                responseKey = v;
+                targetContextKey = k;
+            } else {
+                responseKey = k;
+                targetContextKey = v;
+            }
+
+            Object val = commandOutput.get(responseKey);
             if (val != null) {
                 String contextKey = targetContextKey.startsWith("context.")
                         ? targetContextKey.substring(8) : targetContextKey;

@@ -44,6 +44,73 @@ public class CreateBucketCommand implements WorkflowCommand {
     }
 
     @Override
+    public String getDisplayName() {
+        return "Create Work Bucket";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Creates a work bucket item for operational queues with SLA tracking and bucket dependencies.";
+    }
+
+    @Override
+    public String getCategory() {
+        return "Lifecycle";
+    }
+
+    @Override
+    public List<com.vi.atlas.workflow.dto.CommandParameterDto> getParameters() {
+        com.vi.atlas.workflow.dto.CommandParameterDto bucketParam = new com.vi.atlas.workflow.dto.CommandParameterDto(
+                "bucketId",
+                "Target Bucket",
+                "select",
+                true,
+                "",
+                "Identifier of the work bucket to create"
+        );
+        bucketParam.setDataSource("BUCKETS");
+
+        com.vi.atlas.workflow.dto.CommandParameterDto depParam = new com.vi.atlas.workflow.dto.CommandParameterDto(
+                "dependencyBuckets",
+                "Dependency Buckets",
+                "multiselect",
+                false,
+                List.of(),
+                "Prior buckets that must complete before this bucket unlocks"
+        );
+        depParam.setDataSource("BUCKETS");
+
+        com.vi.atlas.workflow.dto.CommandParameterDto prioParam = new com.vi.atlas.workflow.dto.CommandParameterDto(
+                "priority",
+                "Queue Priority",
+                "select",
+                false,
+                "MEDIUM",
+                "Operational urgency priority"
+        );
+        prioParam.setOptions(List.of(
+                new com.vi.atlas.workflow.dto.CommandParameterDto.Option("LOW", "LOW"),
+                new com.vi.atlas.workflow.dto.CommandParameterDto.Option("MEDIUM", "MEDIUM"),
+                new com.vi.atlas.workflow.dto.CommandParameterDto.Option("HIGH", "HIGH"),
+                new com.vi.atlas.workflow.dto.CommandParameterDto.Option("CRITICAL", "CRITICAL")
+        ));
+
+        return List.of(
+                bucketParam,
+                depParam,
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "slaHours",
+                        "SLA Target (Hours)",
+                        "number",
+                        false,
+                        24,
+                        "SLA completion deadline in hours"
+                ),
+                prioParam
+        );
+    }
+
+    @Override
     public Map<String, Object> execute(Map<String, Object> input) throws Exception {
         String instanceId = (String) input.get("_instanceId");
         String contextId = (String) input.get("_contextId");

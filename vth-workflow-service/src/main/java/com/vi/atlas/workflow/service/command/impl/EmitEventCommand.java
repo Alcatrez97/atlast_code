@@ -26,6 +26,46 @@ public class EmitEventCommand implements WorkflowCommand {
     }
 
     @Override
+    public String getDisplayName() {
+        return "Emit Domain Event";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Broadcasts an internal domain or resume event to active event subscribers and waiting workflow instances.";
+    }
+
+    @Override
+    public String getCategory() {
+        return "Event";
+    }
+
+    @Override
+    public java.util.List<com.vi.atlas.workflow.dto.CommandParameterDto> getParameters() {
+        com.vi.atlas.workflow.dto.CommandParameterDto eventParam = new com.vi.atlas.workflow.dto.CommandParameterDto(
+                "eventType",
+                "Event Key / Type",
+                "select",
+                true,
+                "",
+                "Identifier of the domain event to broadcast"
+        );
+        eventParam.setDataSource("EVENTS");
+
+        return java.util.List.of(
+                eventParam,
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "payloadMapping",
+                        "Payload Mapping (JSON)",
+                        "json",
+                        false,
+                        "{}",
+                        "JSON mapping SpEL expressions or context keys to outbound event payload"
+                )
+        );
+    }
+
+    @Override
     public Map<String, Object> execute(Map<String, Object> input) throws Exception {
         String eventKey = getStringParam(input, "eventKey", "eventType");
         if (eventKey == null) {

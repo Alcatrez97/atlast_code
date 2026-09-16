@@ -149,8 +149,8 @@ public class EventRoutingService {
                     if (resumedSync) {
                         log.info("Resumed workflow instance: {} synchronously in active traversal thread.", instance.getId());
                     } else {
-                        executionService.resume(instance.getId(), payload);
-                        log.info("Resumed workflow instance: {} successfully.", instance.getId());
+                        executionService.resume(instance.getId(), sub.getTargetNodeId(), payload);
+                        log.info("Resumed workflow instance: {} successfully on targetNode: {}.", instance.getId(), sub.getTargetNodeId());
                     }
                 } catch (Exception ex) {
                     log.error("Failed to resume instance {} on event: {}", instance.getId(), ex.getMessage(), ex);

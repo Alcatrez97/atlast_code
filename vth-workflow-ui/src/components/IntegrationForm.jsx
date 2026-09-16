@@ -134,7 +134,38 @@ export const IntegrationForm = ({ integration, onClose, onRefresh, onShowNotific
 
         {/* REST Fields */}
         {providerType === 'REST' && (<>
-            <TextField fullWidth size="small" label="Endpoint HTTP URL" placeholder="http://localhost:9091/api/mock/customer/{{msisdn}}" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} helperText="use {{varKey}} placeholders for parameter interpolation" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+            {/* Context Data Flow Info Banner */}
+            <Paper elevation={0} sx={{ p: 2, bgcolor: 'rgba(20,184,166,0.05)', border: '1px solid rgba(20,184,166,0.2)', borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#14b8a6', letterSpacing: 0.3, textTransform: 'uppercase', fontSize: '11px' }}>
+                  🔄 Context &amp; Payload Data Flow Guide
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ fontSize: '12px', color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
+                External integrations communicate with workflow context in two directions:
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+                <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#38bdf8', display: 'block', mb: 0.5 }}>
+                    📤 Outgoing: Context ➔ API Request
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '11px', color: 'text.secondary', display: 'block', lineHeight: 1.4 }}>
+                    Use <code>&#123;&#123;fieldName&#125;&#125;</code> in the <b>URL</b>, <b>Headers</b>, or <b>Body Template</b>. At runtime, values are automatically interpolated from active workflow context.
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', display: 'block', mb: 0.5 }}>
+                    📥 Incoming: API Response ➔ Context
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '11px', color: 'text.secondary', display: 'block', lineHeight: 1.4 }}>
+                    In <b>Context Schema</b>: set <code>Response Path Mapping</code> (e.g. <code>data.score</code>).<br/>
+                    In <b>Command Nodes</b>: set <code>Response Output Mapping</code> (e.g. <code>&#123;&quot;score&quot;: &quot;context.score&quot;&#125;</code>).
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            <TextField fullWidth size="small" label="Endpoint HTTP URL" placeholder="http://localhost:9091/api/kyc/verify/{{msisdn}}?pan={{panNumber}}" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} helperText="Supports dynamic {{varKey}} placeholders interpolated from context (e.g., {{msisdn}}, {{panNumber}})" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px', fontFamily: 'monospace' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
 
             <FormControl fullWidth size="small">
               <InputLabel id="method-label" sx={{ color: 'text.secondary' }}>HTTP Method</InputLabel>
@@ -142,14 +173,39 @@ export const IntegrationForm = ({ integration, onClose, onRefresh, onShowNotific
                 color: 'text.primary',
                 '.MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }
             }}>
-                <MenuItem value="GET">GET</MenuItem>
-                <MenuItem value="POST">POST</MenuItem>
+                <MenuItem value="GET">GET (Pass parameters in URL query or path)</MenuItem>
+                <MenuItem value="POST">POST (Pass payload via Request Body Template)</MenuItem>
+                <MenuItem value="PUT">PUT (Replace resource via Request Body Template)</MenuItem>
+                <MenuItem value="PATCH">PATCH (Update partial resource via Request Body Template)</MenuItem>
+                <MenuItem value="DELETE">DELETE (Delete resource)</MenuItem>
               </Select>
             </FormControl>
 
-            <TextField fullWidth multiline rows={3} label="HTTP Headers (JSON)" placeholder='{"Authorization": "Bearer JWTTOKEN"}' value={headersJson} onChange={(e) => setHeadersJson(e.target.value)} helperText="valid json object of HTTP headers" slotProps={{ input: { sx: { color: 'text.primary', fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+            <TextField fullWidth multiline rows={2} label="HTTP Headers (JSON)" placeholder='{"Authorization": "Bearer {{authToken}}", "Content-Type": "application/json"}' value={headersJson} onChange={(e) => setHeadersJson(e.target.value)} helperText="Valid JSON object of HTTP headers. Supports dynamic {{varKey}} placeholders." slotProps={{ input: { sx: { color: 'text.primary', fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
 
-            {method === 'POST' && (<TextField fullWidth multiline rows={4} label="POST Request Body Template" placeholder='{"msisdn": "{{msisdn}}", "circle": "{{circle}}"}' value={requestTemplate} onChange={(e) => setRequestTemplate(e.target.value)} helperText="JSON body template with dynamic {{varKey}} placeholders" slotProps={{ input: { sx: { color: 'text.primary', fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>)}
+            {['POST', 'PUT', 'PATCH'].includes(method) && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                    📤 Outbound Request Body Template ({method})
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setRequestTemplate(JSON.stringify({
+                      pan: "{{panNumber}}",
+                      msisdn: "{{msisdn}}",
+                      circle: "{{circleId}}",
+                      referenceId: "{{businessKey}}"
+                    }, null, 2))}
+                    sx={{ fontSize: '11px', textTransform: 'none', color: '#14b8a6', py: 0 }}
+                  >
+                    Insert Sample Outgoing Payload
+                  </Button>
+                </Box>
+                <TextField fullWidth multiline rows={5} label="" placeholder={`{\n  "pan": "{{panNumber}}",\n  "circle": "{{circleId}}",\n  "amount": "{{orderAmount}}"\n}`} value={requestTemplate} onChange={(e) => setRequestTemplate(e.target.value)} helperText="JSON payload template. Placeholders like {{varKey}} will be dynamically replaced with values from workflow context." slotProps={{ input: { sx: { color: 'text.primary', fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+              </Box>
+            )}
           </>)}
 
         {/* Database Fields */}

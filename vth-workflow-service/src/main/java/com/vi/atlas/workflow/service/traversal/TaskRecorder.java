@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,12 +36,12 @@ public class TaskRecorder {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a RUNNING {@link TaskInstance} for the given node and persists it.
+     * Creates a RUNNING {@link TaskInstance} for the given node and registers it in-memory.
      *
      * @param instance the workflow instance (may be {@code null} — no-op if so)
      * @param node     the node being executed
      * @param input    snapshot of the context map at the moment the task starts
-     * @return the persisted {@code TaskInstance}, or {@code null} if instance is null
+     * @return the {@code TaskInstance}, or {@code null} if instance is null
      */
     public TaskInstance recordTaskStart(WorkflowInstance instance,
                                         WorkflowNodeDto node,
@@ -57,16 +58,23 @@ public class TaskRecorder {
         ti.setStartedAt(LocalDateTime.now());
 
         TraversalContext travCtx = TraversalContextHolder.get();
-        if (travCtx != null && travCtx.localTaskStatuses != null) {
-            travCtx.localTaskStatuses.put(node.getId(), "RUNNING");
+        if (travCtx != null) {
+            if (travCtx.localTaskStatuses != null) {
+                travCtx.localTaskStatuses.put(node.getId(), "RUNNING");
+            }
+            if (travCtx.inMemoryTasks != null) {
+                travCtx.inMemoryTasks.put(ti.getId(), ti);
+            }
+            return ti;
         }
 
+        // Fallback for standalone executions without TraversalContext
         return taskInstanceRepository.save(ti);
     }
 
     /**
      * Updates an existing {@link TaskInstance} to the given terminal status and
-     * persists the output data.
+     * registers output data in-memory for deferred batch persistence.
      *
      * @param ti     the task instance to update (no-op if {@code null})
      * @param output map of outputs produced by the node
@@ -82,23 +90,67 @@ public class TaskRecorder {
 
         // Sync the in-memory cache
         TraversalContext travCtx = TraversalContextHolder.get();
-        if (travCtx != null && travCtx.localTaskStatuses != null) {
-            String id = ti.getId();
-            String prefix = travCtx.instanceId + "_";
-            if (id.startsWith(prefix)) {
-                String remaining = id.substring(prefix.length());
-                int lastUnderscore = remaining.lastIndexOf('_');
-                if (lastUnderscore > 0) {
-                    String nodeId = remaining.substring(0, lastUnderscore);
-                    travCtx.localTaskStatuses.put(nodeId, status);
-                    if (travCtx.localTaskOutputs != null) {
-                        travCtx.localTaskOutputs.put(nodeId, new HashMap<>(output));
+        if (travCtx != null) {
+            if (travCtx.localTaskStatuses != null) {
+                String id = ti.getId();
+                String prefix = travCtx.instanceId + "_";
+                if (id.startsWith(prefix)) {
+                    String remaining = id.substring(prefix.length());
+                    int lastUnderscore = remaining.lastIndexOf('_');
+                    if (lastUnderscore > 0) {
+                        String nodeId = remaining.substring(0, lastUnderscore);
+                        travCtx.localTaskStatuses.put(nodeId, status);
+                        if (travCtx.localTaskOutputs != null) {
+                            travCtx.localTaskOutputs.put(nodeId, new HashMap<>(output));
+                        }
                     }
                 }
             }
+            if (travCtx.inMemoryTasks != null) {
+                travCtx.inMemoryTasks.put(ti.getId(), ti);
+            }
+            return;
         }
 
+        // Fallback for standalone executions without TraversalContext
         taskInstanceRepository.save(ti);
+    }
+
+    /**
+     * Flushes all accumulated in-memory tasks to the database in a single batch.
+     *
+     * @param instanceId the workflow instance ID
+     */
+    public void flushPendingTasks(String instanceId) {
+        TraversalContext travCtx = TraversalContextHolder.get();
+        if (travCtx != null && travCtx.inMemoryTasks != null && !travCtx.inMemoryTasks.isEmpty()) {
+            List<TaskInstance> toSave = new ArrayList<>(travCtx.inMemoryTasks.values());
+            log.info("Flushing {} deferred in-memory task instances in a single batch for instanceId={}",
+                    toSave.size(), instanceId);
+            taskInstanceRepository.saveAll(toSave);
+            taskInstanceRepository.flush();
+            travCtx.inMemoryTasks.clear();
+        }
+    }
+
+    /**
+     * Determines whether a node is idempotent (safe to execute in-memory with deferred persistence).
+     *
+     * @param node the workflow node
+     * @return true if idempotent, false if stateful / side-effect boundary
+     */
+    public boolean isIdempotent(WorkflowNodeDto node) {
+        if (node == null) return true;
+        if (node.getData() != null && node.getData().containsKey("isIdempotent")) {
+            Object val = node.getData().get("isIdempotent");
+            if (val instanceof Boolean) return (Boolean) val;
+            if (val instanceof String) return Boolean.parseBoolean((String) val);
+        }
+        String type = node.getType() != null ? node.getType().toUpperCase() : "";
+        return switch (type) {
+            case "COMMAND", "WAIT_EVENT", "BUCKET", "SUB_WORKFLOW" -> false;
+            default -> true; // RULE, DECISION, START, END, PARALLEL, JOIN, TIMER, etc.
+        };
     }
 
     // -----------------------------------------------------------------------

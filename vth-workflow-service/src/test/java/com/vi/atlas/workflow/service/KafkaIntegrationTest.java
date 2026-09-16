@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @EmbeddedKafka(
-    partitions = 1,
+    partitions = 3,
     topics = {"caf-lifecycle", "workflow-bucket-tasks", "workflow-bucket-resolution"},
     bootstrapServersProperty = "spring.kafka.bootstrap-servers"
 )
@@ -59,12 +59,20 @@ public class KafkaIntegrationTest {
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Autowired
+    private org.springframework.kafka.config.KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
     private Consumer<String, Object> consumer;
     private String workflowKey;
     private String definitionId;
 
     @BeforeEach
     public void setUp() {
+        // Wait for all @KafkaListener containers to have their partitions assigned
+        for (org.springframework.kafka.listener.MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
+            org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(container, 3);
+        }
+
         // Set up Kafka Consumer to read from workflow-bucket-tasks
         Map<String, Object> consumerProps = KafkaTestUtils.consumerProps(
                 embeddedKafka.getBrokersAsString(), "test-tasks-group", "true");

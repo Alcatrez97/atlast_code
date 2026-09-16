@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Box, Typography, Button, Card, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, Paper, TextField, InputAdornment, Tooltip, IconButton, Chip, Drawer, Badge, Container, Select, MenuItem, FormControl } from '@mui/material';
-import { Plus, Search, Trash2, History, Play, PlayCircle, Copy } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Typography, Button, Card, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, Paper, TextField, InputAdornment, Tooltip, IconButton, Chip, Drawer, Badge, Container, Select, MenuItem, FormControl, TablePagination, TableSortLabel } from '@mui/material';
+import { Plus, Search, Trash2, History, Play, PlayCircle, Copy, ArrowUpDown } from 'lucide-react';
 import GlobeIcon from '@mui/icons-material/Public';
 import CircleIcon from '@mui/icons-material/TripOrigin';
 import { useWorkflowStore } from '../store/workflowStore.js';
@@ -21,26 +21,80 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
     const [circleFilter, setCircleFilter] = useState('ALL');
     const [historyOpen, setHistoryOpen] = useState(false);
 
+    // Pagination & Sorting States
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [sortBy, setSortBy] = useState('updatedAt');
+    const [sortOrder, setSortOrder] = useState('desc');
+
+    // Reset to page 0 whenever filter or search changes
+    useEffect(() => {
+        setPage(0);
+    }, [searchTerm, circleFilter]);
+
     const handleRunWorkflow = (workflow) => {
         setSelectedWorkflow(workflow);
         setView('executor');
     };
 
-    const filteredWorkflows = workflows.filter(w => {
-        const matchesSearch = w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            w.key.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            w.description?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        let matchesCircle = true;
-        if (circleFilter !== 'ALL') {
-            if (w.circleId == null) {
-                matchesCircle = true; // Global workflows match all filters
-            } else {
-                matchesCircle = Number(w.circleId) === Number(circleFilter);
-            }
+    const handleSort = (field) => {
+        if (sortBy === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setSortOrder(field === 'updatedAt' || field === 'versions' ? 'desc' : 'asc');
         }
-        return matchesSearch && matchesCircle;
-    });
+        setPage(0);
+    };
+
+    // Filter workflows
+    const filteredWorkflows = useMemo(() => {
+        return workflows.filter(w => {
+            const matchesSearch = w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                w.key.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                w.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+            let matchesCircle = true;
+            if (circleFilter !== 'ALL') {
+                if (w.circleId == null) {
+                    matchesCircle = true; // Global workflows match all filters
+                } else {
+                    matchesCircle = Number(w.circleId) === Number(circleFilter);
+                }
+            }
+            return matchesSearch && matchesCircle;
+        });
+    }, [workflows, searchTerm, circleFilter]);
+
+    // Sort workflows
+    const sortedWorkflows = useMemo(() => {
+        return [...filteredWorkflows].sort((a, b) => {
+            let comparison = 0;
+            if (sortBy === 'updatedAt') {
+                const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                comparison = dateA - dateB;
+            } else if (sortBy === 'name') {
+                comparison = (a.name || '').localeCompare(b.name || '');
+            } else if (sortBy === 'key') {
+                comparison = (a.key || '').localeCompare(b.key || '');
+            } else if (sortBy === 'versions') {
+                const vA = a.versions?.length || 0;
+                const vB = b.versions?.length || 0;
+                comparison = vA - vB;
+            } else if (sortBy === 'activeVersion') {
+                const vA = a.activeVersion != null ? Number(a.activeVersion) : -1;
+                const vB = b.activeVersion != null ? Number(b.activeVersion) : -1;
+                comparison = vA - vB;
+            }
+            return sortOrder === 'desc' ? -comparison : comparison;
+        });
+    }, [filteredWorkflows, sortBy, sortOrder]);
+
+    // Paginate sorted workflows
+    const paginatedWorkflows = useMemo(() => {
+        return sortedWorkflows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    }, [sortedWorkflows, page, rowsPerPage]);
 
     const renderCircleScope = (circleId) => {
         if (circleId == null) {
@@ -76,9 +130,18 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
         {/* Page Header */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 500, color: 'text.primary', mb: 0.5 }}>
-              Workflow Definitions
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                Workflow Definitions
+              </Typography>
+              <Chip
+                label={`${filteredWorkflows.length} Total`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ height: 22, fontSize: '11px', fontWeight: 700 }}
+              />
+            </Box>
             <Typography variant="body2" color="text.secondary">
               Manage, version, and govern enterprise decision structures across operational circles.
             </Typography>
@@ -107,6 +170,7 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
 
         {/* Workflow Table Card */}
         <Card sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+          {/* Controls bar: Search, Circle Filter, Sort By */}
           <Box sx={{ p: 2.5, display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(255,255,255,0.01)', gap: 2 }}>
             <TextField size="small" placeholder="Search workflows by key, name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} slotProps={{
             input: {
@@ -116,7 +180,7 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
                 sx: {
                     borderRadius: 2,
                     bgcolor: 'rgba(0,0,0,0.05)',
-                    width: 300,
+                    width: 320,
                     '.MuiOutlinedInput-notchedOutline': {
                         borderColor: 'divider'
                     }
@@ -124,45 +188,112 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
             }
         }}/>
 
-            {/* Circle Filter Dropdown */}
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <Select
-                value={circleFilter}
-                onChange={(e) => setCircleFilter(e.target.value)}
-                displayEmpty
-                sx={{ borderRadius: 2, fontSize: '13px', fontWeight: 500 }}
-              >
-                <MenuItem value="ALL" sx={{ fontSize: '13px', fontWeight: 500 }}>
-                  <GlobeIcon sx={{ fontSize: 16, mr: 1, color: '#3b82f6' }} /> All Circle Scope
-                </MenuItem>
-                {CIRCLE_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: '13px', fontWeight: 500 }}>
-                    <CircleIcon sx={{ fontSize: 14, mr: 1, color: opt.color }} /> Filter by {opt.label}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+              {/* Circle Filter Dropdown */}
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <Select
+                  value={circleFilter}
+                  onChange={(e) => setCircleFilter(e.target.value)}
+                  displayEmpty
+                  sx={{ borderRadius: 2, fontSize: '13px', fontWeight: 500 }}
+                >
+                  <MenuItem value="ALL" sx={{ fontSize: '13px', fontWeight: 500 }}>
+                    <GlobeIcon sx={{ fontSize: 16, mr: 1, color: '#3b82f6' }} /> All Circle Scope
                   </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                  {CIRCLE_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.id} value={opt.id} sx={{ fontSize: '13px', fontWeight: 500 }}>
+                      <CircleIcon sx={{ fontSize: 14, mr: 1, color: opt.color }} /> Filter by {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Sort By Dropdown */}
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <Select
+                  value={`${sortBy}_${sortOrder}`}
+                  onChange={(e) => {
+                    const [field, order] = e.target.value.split('_');
+                    setSortBy(field);
+                    setSortOrder(order);
+                    setPage(0);
+                  }}
+                  displayEmpty
+                  sx={{ borderRadius: 2, fontSize: '13px', fontWeight: 500 }}
+                >
+                  <MenuItem value="updatedAt_desc" sx={{ fontSize: '13px' }}>📅 Updated (Newest First)</MenuItem>
+                  <MenuItem value="updatedAt_asc" sx={{ fontSize: '13px' }}>📅 Updated (Oldest First)</MenuItem>
+                  <MenuItem value="name_asc" sx={{ fontSize: '13px' }}>🔤 Name (A → Z)</MenuItem>
+                  <MenuItem value="name_desc" sx={{ fontSize: '13px' }}>🔤 Name (Z → A)</MenuItem>
+                  <MenuItem value="key_asc" sx={{ fontSize: '13px' }}>🔑 Key (A → Z)</MenuItem>
+                  <MenuItem value="key_desc" sx={{ fontSize: '13px' }}>🔑 Key (Z → A)</MenuItem>
+                  <MenuItem value="versions_desc" sx={{ fontSize: '13px' }}>🔢 Most Versions</MenuItem>
+                  <MenuItem value="versions_asc" sx={{ fontSize: '13px' }}>🔢 Fewest Versions</MenuItem>
+                  <MenuItem value="activeVersion_desc" sx={{ fontSize: '13px' }}>🏷️ Active Version (Highest)</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
           </Box>
 
           <TableContainer component={Paper} sx={{ bgcolor: 'transparent', boxShadow: 'none', borderRadius: 0 }}>
             <Table>
               <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 500 }}>Workflow Details</TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>Workflow Key</TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>Circle Scope</TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>Active Version</TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>Versions</TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>Updated At</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 500 }}>Actions</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <TableSortLabel
+                      active={sortBy === 'name'}
+                      direction={sortBy === 'name' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('name')}
+                    >
+                      Workflow Details
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <TableSortLabel
+                      active={sortBy === 'key'}
+                      direction={sortBy === 'key' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('key')}
+                    >
+                      Workflow Key
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Circle Scope</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <TableSortLabel
+                      active={sortBy === 'activeVersion'}
+                      direction={sortBy === 'activeVersion' ? sortOrder : 'asc'}
+                      onClick={() => handleSort('activeVersion')}
+                    >
+                      Active Version
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <TableSortLabel
+                      active={sortBy === 'versions'}
+                      direction={sortBy === 'versions' ? sortOrder : 'desc'}
+                      onClick={() => handleSort('versions')}
+                    >
+                      Versions
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    <TableSortLabel
+                      active={sortBy === 'updatedAt'}
+                      direction={sortBy === 'updatedAt' ? sortOrder : 'desc'}
+                      onClick={() => handleSort('updatedAt')}
+                    >
+                      Updated At
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredWorkflows.length === 0 ? (<TableRow>
+                {paginatedWorkflows.length === 0 ? (<TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                       <Typography color="text.secondary">No workflows found. Register a workflow to get started.</Typography>
                     </TableCell>
-                  </TableRow>) : (filteredWorkflows.map((row) => (<TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: 'rgba(0,0,0,0.01) !important' } }}>
+                  </TableRow>) : (paginatedWorkflows.map((row) => (<TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: 'rgba(0,0,0,0.01) !important' } }}>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
                           {row.name}
@@ -216,6 +347,25 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Table Pagination */}
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50, 100]}
+            component="div"
+            count={filteredWorkflows.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={(e, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            sx={{
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.paper'
+            }}
+          />
         </Card>
 
         {/* Execution History Drawer */}

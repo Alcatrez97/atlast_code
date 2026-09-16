@@ -27,7 +27,7 @@ public class BucketExecution {
     @JoinColumn(name = "execution_log_id", nullable = false, foreignKey = @ForeignKey(name = "fk_bex_exec_log"))
     private ExecutionLog executionLog;
 
-    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instance_id", foreignKey = @ForeignKey(name = "fk_bex_instance"))
     private WorkflowInstance workflowInstance;
 
@@ -99,6 +99,9 @@ public class BucketExecution {
             this.executionLog.setId(executionLogId);
         }
     }
+
+    public WorkflowInstance getWorkflowInstance() { return workflowInstance; }
+    public void setWorkflowInstance(WorkflowInstance workflowInstance) { this.workflowInstance = workflowInstance; }
 
     public String getInstanceId() {
         return workflowInstance != null ? workflowInstance.getId() : null;

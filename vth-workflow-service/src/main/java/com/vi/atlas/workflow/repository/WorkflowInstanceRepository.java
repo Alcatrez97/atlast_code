@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstance, String> {
@@ -17,6 +18,8 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
     List<WorkflowInstance> findByStatusOrderByCreatedAtDesc(WorkflowInstanceStatus status);
     List<WorkflowInstance> findAllByOrderByCreatedAtDesc();
     long countByWorkflowVersionId(String versionId);
+    Optional<WorkflowInstance> findFirstByBusinessKeyOrderByCreatedAtDesc(String businessKey);
+    Optional<WorkflowInstance> findFirstByWorkflowKeyAndBusinessKeyOrderByCreatedAtDesc(String workflowKey, String businessKey);
 
     @Query("SELECT wi FROM WorkflowInstance wi WHERE " +
            "(:workflowKey IS NULL OR :workflowKey = '' OR wi.workflowKey = :workflowKey) AND " +

@@ -353,7 +353,16 @@ public class ExecutionService {
             backoff = @org.springframework.retry.annotation.Backoff(delay = 200, multiplier = 1.5)
     )
     public ExecutionLogDto resume(String instanceId, Map<String, Object> additionalContext) {
-        log.info("Resuming workflow instance. instanceId={}, additionalContext={}", instanceId, additionalContext);
+        return resume(instanceId, null, additionalContext);
+    }
+
+    @org.springframework.retry.annotation.Retryable(
+            retryFor = { org.springframework.orm.ObjectOptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class, IllegalStateException.class },
+            maxAttempts = 5,
+            backoff = @org.springframework.retry.annotation.Backoff(delay = 200, multiplier = 1.5)
+    )
+    public ExecutionLogDto resume(String instanceId, String targetNodeId, Map<String, Object> additionalContext) {
+        log.info("Resuming workflow instance. instanceId={}, targetNodeId={}, additionalContext={}", instanceId, targetNodeId, additionalContext);
         WorkflowInstance instance = instanceRepository.findById(instanceId)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow instance not found: " + instanceId));
         
@@ -366,8 +375,13 @@ public class ExecutionService {
         WorkflowVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalStateException("Version not found: " + versionId));
 
+        // Determine node to resume from
+        String resumeNodeId = (targetNodeId != null && !targetNodeId.isBlank())
+                ? targetNodeId
+                : instance.getCurrentNodeId();
+
         // Auto-resolve any pending BucketExecution for the node we are resuming from
-        String currentNodeId = instance.getCurrentNodeId();
+        String currentNodeId = resumeNodeId;
         if (currentNodeId != null) {
             WorkflowNodeDto node = version.getDefinition().getNodes().stream()
                     .filter(n -> n.getId().equals(currentNodeId))
@@ -464,8 +478,8 @@ public class ExecutionService {
         List<StepRecordDto> trace = null;
 
         try {
-            // Traverse starting from the suspended node
-            GraphTraversalEngine.TraversalResult result = traversalEngine.traverse(version, lazyContext, instance.getCurrentNodeId(), instanceId);
+            // Traverse starting from the suspended target node
+            GraphTraversalEngine.TraversalResult result = traversalEngine.traverse(version, lazyContext, resumeNodeId, instanceId);
             trace = result.getTrace();
 
             // Enrich BUCKET steps with real-time bucket registry metadata

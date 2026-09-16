@@ -212,6 +212,12 @@ public class GraphTraversalEngine {
                         contextId, version, stepIdx, context);
             }
         } finally {
+            try {
+                taskRecorder.flushPendingTasks(instanceId);
+            } catch (Exception ex) {
+                log.warn("Error flushing pending in-memory tasks during traversal teardown for instanceId={}: {}",
+                        instanceId, ex.getMessage());
+            }
             CURRENT_TRAVERSAL.remove();
             TraversalContextHolder.remove();
         }
@@ -280,11 +286,27 @@ public class GraphTraversalEngine {
             @SuppressWarnings("unchecked")
             Map<?, ?> inputMap = (Map<?, ?>) inputMappingObj;
             for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
-                String sourceExpr = String.valueOf(entry.getKey());
-                String targetVar  = String.valueOf(entry.getValue());
-                Object resolved;
+                String k = String.valueOf(entry.getKey());
+                String v = String.valueOf(entry.getValue());
+
+                String sourceExpr;
+                String targetVar;
+
+                // Support both "apiField": "context.field" AND "context.field": "apiField"
+                if (v.startsWith("context.") || v.startsWith("#") || v.contains("[") || context.containsKey(v)) {
+                    targetVar = k;
+                    sourceExpr = v;
+                } else if (k.startsWith("context.") || k.startsWith("#") || k.contains("[") || context.containsKey(k)) {
+                    sourceExpr = k;
+                    targetVar = v;
+                } else {
+                    targetVar = k;
+                    sourceExpr = v;
+                }
+
+                Object resolved = null;
                 if (sourceExpr.contains(".") || sourceExpr.contains("[")
-                        || sourceExpr.contains("'") || sourceExpr.contains("context")) {
+                        || sourceExpr.contains("'") || sourceExpr.contains("context") || sourceExpr.startsWith("#")) {
                     try { resolved = spelEvaluator.evaluate(sourceExpr, spelCtx); }
                     catch (Exception e) { resolved = context.get(sourceExpr); }
                 } else {
@@ -311,9 +333,25 @@ public class GraphTraversalEngine {
             @SuppressWarnings("unchecked")
             Map<?, ?> outputMap = (Map<?, ?>) outputMappingObj;
             for (Map.Entry<?, ?> entry : outputMap.entrySet()) {
-                String outputKey       = String.valueOf(entry.getKey());
-                String targetContextKey = String.valueOf(entry.getValue());
-                Object val = output.get(outputKey);
+                String k = String.valueOf(entry.getKey());
+                String v = String.valueOf(entry.getValue());
+
+                String responseKey;
+                String targetContextKey;
+
+                // Support both "responseKey": "context.targetVar" AND "targetVar": "responseKey"
+                if (v.startsWith("context.") || (!output.containsKey(v) && output.containsKey(k))) {
+                    responseKey = k;
+                    targetContextKey = v;
+                } else if (k.startsWith("context.") || (!output.containsKey(k) && output.containsKey(v))) {
+                    responseKey = v;
+                    targetContextKey = k;
+                } else {
+                    responseKey = k;
+                    targetContextKey = v;
+                }
+
+                Object val = output.get(responseKey);
                 if (val != null) {
                     String contextKey = targetContextKey.startsWith("context.")
                             ? targetContextKey.substring(8) : targetContextKey;
@@ -336,6 +374,9 @@ public class GraphTraversalEngine {
                                       String contextId,
                                       WorkflowVersion version,
                                       String eventType) {
+        // Ensure all prior in-memory tasks are committed to DB before launching background thread
+        taskRecorder.flushPendingTasks(instanceId);
+
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             CURRENT_TRAVERSAL.remove();
             TraversalContextHolder.remove();

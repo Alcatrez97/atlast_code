@@ -23,6 +23,43 @@ public class MqPublishCommand implements WorkflowCommand {
     }
 
     @Override
+    public String getDisplayName() {
+        return "Publish to Kafka / MQ";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Publishes an asynchronous message payload to an Apache Kafka or MQ topic.";
+    }
+
+    @Override
+    public String getCategory() {
+        return "Messaging";
+    }
+
+    @Override
+    public java.util.List<com.vi.atlas.workflow.dto.CommandParameterDto> getParameters() {
+        return java.util.List.of(
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "topic",
+                        "Kafka / Queue Topic",
+                        "text",
+                        true,
+                        "",
+                        "Target messaging topic or queue name"
+                ),
+                new com.vi.atlas.workflow.dto.CommandParameterDto(
+                        "key",
+                        "Partition Key (Optional)",
+                        "text",
+                        false,
+                        "",
+                        "Message partition key (e.g. businessKey or trackingId)"
+                )
+        );
+    }
+
+    @Override
     public boolean isExternalIo() {
         return true;
     }

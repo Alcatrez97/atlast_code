@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, Box, Typography, IconButton, Divider, TextField, Button, Chip, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Tooltip } from '@mui/material';
+import { Drawer, Box, Typography, IconButton, Divider, TextField, Button, Chip, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Tooltip, Paper, Switch, FormControlLabel } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import InfoIcon from '@mui/icons-material/Info';
@@ -18,6 +18,16 @@ const STEP_STATUS_COLORS = {
   COMPLETED: '#10b981', FAILED: '#ef4444', SKIPPED: '#6b7280',
   WAITING: '#f59e0b'
 };
+const isValidJson = (str) => {
+  if (!str || !str.trim()) return true;
+  try {
+    JSON.parse(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
 export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClose, onSaveNode, onDeleteNode }) => {
   const [label, setLabel] = useState('');
   const [expression, setExpression] = useState('');
@@ -43,12 +53,24 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
   const [businessEligibilityRule, setBusinessEligibilityRule] = useState('');
   const [orientation, setOrientation] = useState('vertical');
   const [disabledBehavior, setDisabledBehavior] = useState('SKIP_ACCEPT');
+  const [isIdempotent, setIsIdempotent] = useState(true);
   const { selectedWorkflow } = useWorkflowStore();
   const [schemaFields, setSchemaFields] = useState([]);
   const [registeredBuckets, setRegisteredBuckets] = useState([]);
   const [registeredRules, setRegisteredRules] = useState([]);
   const [registeredWorkflows, setRegisteredWorkflows] = useState([]);
   const [registeredEvents, setRegisteredEvents] = useState([]);
+  const [availableCommands, setAvailableCommands] = useState([]);
+  const [registeredIntegrations, setRegisteredIntegrations] = useState([]);
+
+  // REST / External System specific states
+  const [integrationKey, setIntegrationKey] = useState('');
+  const [restUrl, setRestUrl] = useState('');
+  const [restMethod, setRestMethod] = useState('GET');
+  const [restHeadersStr, setRestHeadersStr] = useState('{}');
+  const [restTimeout, setRestTimeout] = useState(10);
+  const [commandParams, setCommandParams] = useState({});
+
   // Fetch schema fields, registered buckets, and registered rules when drawer opens
   useEffect(() => {
     if (!open || !selectedWorkflow)
@@ -80,6 +102,14 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       .then(res => res.ok ? res.json() : [])
       .then(data => setRegisteredEvents(data))
       .catch(() => setRegisteredEvents([]));
+    fetch('/api/commands')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setAvailableCommands(data))
+      .catch(() => setAvailableCommands([]));
+    fetch('/api/integrations')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setRegisteredIntegrations(data))
+      .catch(() => setRegisteredIntegrations([]));
   }, [open, selectedWorkflow]);
   // Populate fields when node changes
   useEffect(() => {
@@ -111,6 +141,26 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       setBusinessEligibilityRule(node.data?.businessEligibilityRule || node.data?.activationCondition || '');
       setOrientation(node.data?.orientation || 'vertical');
       setDisabledBehavior(node.data?.disabledBehavior || 'SKIP_ACCEPT');
+
+      // Initialize REST / External System properties
+      setIntegrationKey(node.data?.integrationKey || '');
+      setRestUrl(node.data?.url || node.data?.endpointUrl || '');
+      setRestMethod(node.data?.method || 'GET');
+      setRestHeadersStr(node.data?.headers ? (typeof node.data.headers === 'string' ? node.data.headers : JSON.stringify(node.data.headers, null, 2)) : '{}');
+      setRestTimeout(node.data?.timeoutSeconds || node.data?.timeout || 10);
+
+      // Initialize dynamic command params
+      setCommandParams(node.data || {});
+
+      // Determine idempotency from node data or fallback to safe node-type defaults
+      if (node.data?.isIdempotent !== undefined) {
+        setIsIdempotent(Boolean(node.data.isIdempotent));
+      } else {
+        const type = node.type?.toUpperCase() || '';
+        const defaultIdempotent = !['COMMAND', 'WAIT_EVENT', 'BUCKET', 'SUB_WORKFLOW'].includes(type);
+        setIsIdempotent(defaultIdempotent);
+      }
+
       setSaved(false);
     }
   }, [node]);
@@ -123,6 +173,7 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
     try {
       const updatedData = {
         ...node.data,
+        isIdempotent,
         joinType,
         businessEligibilityRule,
         orientation
@@ -171,7 +222,34 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       else if (nodeType === 'COMMAND') {
         updatedData.commandType = commandType;
         updatedData.executionMode = executionMode;
-        if (commandType === 'CREATE_BUCKET') {
+        if (commandType === 'REST' || commandType === 'CALL_EXTERNAL_SYSTEM' || commandType === 'HTTP') {
+          updatedData.integrationKey = integrationKey;
+          updatedData.url = restUrl;
+          updatedData.method = restMethod;
+          try {
+            updatedData.headers = JSON.parse(restHeadersStr || '{}');
+          } catch (e) {
+            alert('Invalid JSON in Request Headers');
+            setIsSaving(false);
+            return;
+          }
+          updatedData.timeoutSeconds = Number(restTimeout) || 10;
+          try {
+            updatedData.inputMapping = JSON.parse(inputMappingStr || '{}');
+          } catch (e) {
+            alert('Invalid JSON in Request Body / Input Mapping');
+            setIsSaving(false);
+            return;
+          }
+          try {
+            updatedData.outputMapping = JSON.parse(outputMappingStr || '{}');
+          } catch (e) {
+            alert('Invalid JSON in Output Mapping');
+            setIsSaving(false);
+            return;
+          }
+        }
+        else if (commandType === 'CREATE_BUCKET') {
           updatedData.bucketId = bucketId;
           updatedData.dependencyBuckets = dependencyBuckets;
         }
@@ -208,6 +286,18 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
             setIsSaving(false);
             return;
           }
+        }
+        else {
+          // Dynamic command parameters (e.g. FINALIZE_CAF_SUBMISSION, MQ, etc.)
+          Object.keys(commandParams).forEach(k => {
+            if (!k.startsWith('_') && k !== 'commandType' && k !== 'executionMode') {
+              let val = commandParams[k];
+              if (typeof val === 'string' && (val.trim().startsWith('{') || val.trim().startsWith('['))) {
+                try { val = JSON.parse(val); } catch (_) {}
+              }
+              updatedData[k] = val;
+            }
+          });
         }
       }
       else if (nodeType === 'WAIT_EVENT') {
@@ -257,8 +347,20 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                 {node.label || nodeType}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25 }}>
+              <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25, alignItems: 'center' }}>
                 <Chip label={nodeType} size="small" sx={{ height: 16, fontSize: '8px', fontWeight: 800, bgcolor: accentColor + '20', color: accentColor, border: 'none' }} />
+                <Chip
+                  label={isIdempotent ? "IDEMPOTENT" : "STATEFUL"}
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: '8px',
+                    fontWeight: 800,
+                    bgcolor: isIdempotent ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                    color: isIdempotent ? '#10b981' : '#f59e0b',
+                    border: 'none'
+                  }}
+                />
                 {isReadOnly && <Chip label="READ ONLY" size="small" sx={{ height: 16, fontSize: '8px', bgcolor: 'rgba(255,255,255,0.05)', color: 'text.secondary', border: 'none' }} />}
               </Box>
             </Box>
@@ -331,6 +433,21 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
 
               {/* Business Eligibility Rule (for non-START nodes) */}
               {nodeType !== 'START' && (<TextField fullWidth size="small" label="Business Eligibility Rule (SpEL)" value={businessEligibilityRule} onChange={(e) => setBusinessEligibilityRule(e.target.value)} disabled={isReadOnly} multiline rows={2} placeholder="context.amount > 50000" helperText={!isReadOnly ? "Only evaluates business variables. E.g. context.requiresA2 == true" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px' } } }} sx={{ mb: 1.5 }} />)}
+
+              {/* Idempotent Toggle */}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isIdempotent}
+                    onChange={(e) => setIsIdempotent(e.target.checked)}
+                    disabled={isReadOnly}
+                    size="small"
+                  />
+                }
+                label={<Typography sx={{ fontSize: '12px', fontWeight: 600 }}>Idempotent</Typography>}
+                sx={{ mb: 1.5, ml: 0, width: '100%', display: 'flex', justifyContent: 'space-between' }}
+                labelPlacement="start"
+              />
 
               {/* RULE fields */}
               {nodeType === 'RULE' && (<>
@@ -538,16 +655,64 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
               {nodeType === 'COMMAND' && (<>
                 <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
                   <InputLabel sx={{ fontSize: '12px' }}>Command Type</InputLabel>
-                  <Select label="Command Type" value={commandType} onChange={(e) => setCommandType(e.target.value)} disabled={isReadOnly} sx={{ fontSize: '12px' }}>
-                    <MenuItem value="CREATE_BUCKET" sx={{ fontSize: '12px' }}>Create Bucket (CREATE_BUCKET)</MenuItem>
-                    <MenuItem value="UPDATE_FORM_STATUS" sx={{ fontSize: '12px' }}>Update Form Status (UPDATE_FORM_STATUS)</MenuItem>
-                    <MenuItem value="START_CHILD_WORKFLOW" sx={{ fontSize: '12px' }}>Start Child Workflow (START_CHILD_WORKFLOW)</MenuItem>
-                    <MenuItem value="EMIT_EVENT" sx={{ fontSize: '12px' }}>Emit Event (EMIT_EVENT)</MenuItem>
-                    <MenuItem value="SEND_NOTIFICATION" sx={{ fontSize: '12px' }}>Send Notification (SEND_NOTIFICATION)</MenuItem>
-                    <MenuItem value="CALL_EXTERNAL_SYSTEM" sx={{ fontSize: '12px' }}>Call External System (CALL_EXTERNAL_SYSTEM)</MenuItem>
-                    <MenuItem value="CREATE_CASE" sx={{ fontSize: '12px' }}>Create Case (CREATE_CASE)</MenuItem>
+                  <Select
+                    label="Command Type"
+                    value={commandType}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setCommandType(newType);
+                      const meta = availableCommands.find(c => c.type === newType);
+                      if (meta && meta.parameters) {
+                        const defaults = {};
+                        meta.parameters.forEach(p => {
+                          if (p.defaultValue !== undefined && p.defaultValue !== null) {
+                            defaults[p.name] = p.defaultValue;
+                          }
+                        });
+                        setCommandParams(prev => ({ ...defaults, ...prev }));
+                      }
+                    }}
+                    disabled={isReadOnly}
+                    sx={{ fontSize: '12px' }}
+                  >
+                    {availableCommands.length > 0 ? (
+                      availableCommands.map(cmd => (
+                        <MenuItem key={cmd.type} value={cmd.type} sx={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{cmd.displayName} ({cmd.type})</span>
+                          <Chip label={cmd.category || 'General'} size="small" sx={{ height: 16, fontSize: '9px', ml: 1, opacity: 0.8 }} />
+                        </MenuItem>
+                      ))
+                    ) : (
+                      [
+                        { type: 'REST', name: 'Call External REST API', cat: 'Integration' },
+                        { type: 'FINALIZE_CAF_SUBMISSION', name: 'Finalize CAF Golden Record', cat: 'Lifecycle' },
+                        { type: 'CREATE_BUCKET', name: 'Create Work Bucket', cat: 'Lifecycle' },
+                        { type: 'UPDATE_FORM_STATUS', name: 'Update Form Status', cat: 'Lifecycle' },
+                        { type: 'START_CHILD_WORKFLOW', name: 'Start Child Workflow', cat: 'Workflow' },
+                        { type: 'EMIT_EVENT', name: 'Emit Domain Event', cat: 'Event' },
+                        { type: 'MQ', name: 'Publish to Kafka / MQ', cat: 'Messaging' },
+                        { type: 'CALL_EXTERNAL_SYSTEM', name: 'Call External System', cat: 'Integration' }
+                      ].map(cmd => (
+                        <MenuItem key={cmd.type} value={cmd.type} sx={{ fontSize: '12px' }}>
+                          {cmd.name} ({cmd.type})
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
+
+                {/* Command description banner */}
+                {(() => {
+                  const meta = availableCommands.find(c => c.type === commandType);
+                  if (meta && meta.description) {
+                    return (
+                      <Alert severity="info" sx={{ py: 0.25, px: 1, mb: 1.5, fontSize: '11px', '& .MuiAlert-icon': { fontSize: 16 } }}>
+                        {meta.description}
+                      </Alert>
+                    );
+                  }
+                  return null;
+                })()}
 
                 <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
                   <InputLabel sx={{ fontSize: '12px' }}>Execution Mode</InputLabel>
@@ -557,6 +722,288 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   </Select>
                 </FormControl>
 
+
+                {/* 1. REST / External System API Configuration */}
+                {(commandType === 'REST' || commandType === 'CALL_EXTERNAL_SYSTEM' || commandType === 'HTTP') && (<>
+                  <Box sx={{ p: 1.5, mb: 1.5, borderRadius: 1.5, border: '1px solid rgba(56, 189, 248, 0.25)', bgcolor: 'rgba(56, 189, 248, 0.03)' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#38bdf8', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      HTTP REST / External System Settings
+                    </Typography>
+
+                    {/* Pre-configured Integration Selector */}
+                    <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                      <InputLabel sx={{ fontSize: '12px' }}>Integration Registry Profile</InputLabel>
+                      <Select
+                        label="Integration Registry Profile"
+                        value={integrationKey}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setIntegrationKey(val);
+                          const matched = registeredIntegrations.find(i => i.integrationKey === val);
+                          if (matched) {
+                            if (!restUrl || restUrl === '') setRestUrl(matched.endpointUrl || '');
+                            if (matched.method) setRestMethod(matched.method.toUpperCase());
+                            if (matched.headersJson && matched.headersJson !== '{}') setRestHeadersStr(matched.headersJson);
+                            if (matched.timeoutMs) setRestTimeout(Math.max(1, Math.round(matched.timeoutMs / 1000)));
+                          }
+                        }}
+                        disabled={isReadOnly}
+                        sx={{ fontSize: '12px' }}
+                      >
+                        <MenuItem value="" sx={{ fontSize: '12px', fontStyle: 'italic', color: 'text.secondary' }}>
+                          -- Custom Inline Endpoint (No Registry Profile) --
+                        </MenuItem>
+                        {registeredIntegrations.map(intg => (
+                          <MenuItem key={intg.id || intg.integrationKey} value={intg.integrationKey} sx={{ fontSize: '12px' }}>
+                            {intg.name} ({intg.integrationKey}) [{intg.method || 'GET'}]
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    {/* Integration Profile Info preview if selected */}
+                    {(() => {
+                      const matched = registeredIntegrations.find(i => i.integrationKey === integrationKey);
+                      if (matched) {
+                        return (
+                          <Box sx={{ p: 1, mb: 1.5, borderRadius: 1, bgcolor: 'rgba(255, 255, 255, 0.04)', border: '1px dashed rgba(255, 255, 255, 0.15)' }}>
+                            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                              Default Method: <strong>{matched.method}</strong> | Timeout: <strong>{matched.timeoutMs}ms</strong>
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: '#38bdf8', fontFamily: 'monospace', fontSize: '10px', wordBreak: 'break-all' }}>
+                              {matched.endpointUrl}
+                            </Typography>
+                          </Box>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* HTTP Method & Timeout row */}
+                    <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+                      <FormControl sx={{ minWidth: 110 }} size="small">
+                        <InputLabel sx={{ fontSize: '12px' }}>Method</InputLabel>
+                        <Select label="Method" value={restMethod} onChange={(e) => setRestMethod(e.target.value)} disabled={isReadOnly} sx={{ fontSize: '12px' }}>
+                          <MenuItem value="GET" sx={{ fontSize: '12px' }}>GET</MenuItem>
+                          <MenuItem value="POST" sx={{ fontSize: '12px' }}>POST</MenuItem>
+                          <MenuItem value="PUT" sx={{ fontSize: '12px' }}>PUT</MenuItem>
+                          <MenuItem value="DELETE" sx={{ fontSize: '12px' }}>DELETE</MenuItem>
+                          <MenuItem value="PATCH" sx={{ fontSize: '12px' }}>PATCH</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="Timeout (sec)"
+                        value={restTimeout}
+                        onChange={(e) => setRestTimeout(e.target.value)}
+                        disabled={isReadOnly}
+                        placeholder="10"
+                      />
+                    </Box>
+
+                    {/* Endpoint URL */}
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Endpoint URL"
+                      value={restUrl}
+                      onChange={(e) => setRestUrl(e.target.value)}
+                      disabled={isReadOnly}
+                      placeholder="https://api.external.com/v1/verify or ${context.apiUrl}"
+                      helperText={!isReadOnly ? "Target URL. Supports ${context.field} placeholders" : undefined}
+                      slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }}
+                      sx={{ mb: 1.5 }}
+                    />
+
+                    {/* Request Headers */}
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Headers (JSON)"
+                      value={restHeadersStr}
+                      onChange={(e) => setRestHeadersStr(e.target.value)}
+                      disabled={isReadOnly}
+                      multiline
+                      rows={2}
+                      placeholder={`{\n  "Authorization": "Bearer ...",\n  "Content-Type": "application/json"\n}`}
+                      slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }}
+                      sx={{ mb: 2 }}
+                    />
+
+                    {/* Outgoing Payload / Input Mapping Card */}
+                    <Paper elevation={0} sx={{ p: 1.5, mb: 2, bgcolor: 'background.paper', border: '1px solid rgba(56,189,248,0.25)', borderRadius: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 800, color: '#38bdf8', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            📤 Outgoing Payload Mapping
+                          </Typography>
+                          <Chip label="Context ➔ API" size="small" sx={{ height: 18, fontSize: '10px', bgcolor: 'rgba(56,189,248,0.15)', color: '#38bdf8', fontWeight: 700 }} />
+                        </Box>
+                        <Chip
+                          label={isValidJson(inputMappingStr) ? "Valid JSON" : "Invalid JSON"}
+                          size="small"
+                          color={isValidJson(inputMappingStr) ? "success" : "error"}
+                          variant="outlined"
+                          sx={{ height: 16, fontSize: '9px' }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontSize: '11px', lineHeight: 1.4 }}>
+                        Maps variables from workflow context into the outbound request body. Both formats are supported: <code>&#123;&quot;apiField&quot;: &quot;context.var&quot;&#125;</code> or <code>&#123;&quot;context.var&quot;: &quot;apiField&quot;&#125;</code>.
+                      </Typography>
+
+                      {/* Available Context Schema Variables chips */}
+                      {schemaFields && schemaFields.length > 0 && !isReadOnly && (
+                        <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption" sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 700 }}>
+                            + Quick Add Context Var:
+                          </Typography>
+                          {schemaFields.map(f => (
+                            <Chip
+                              key={f.fieldKey}
+                              label={f.fieldKey}
+                              size="small"
+                              onClick={() => {
+                                let current = {};
+                                try { current = JSON.parse(inputMappingStr) || {}; } catch(e) {}
+                                current[f.fieldKey] = `context.${f.fieldKey}`;
+                                setInputMappingStr(JSON.stringify(current, null, 2));
+                              }}
+                              sx={{
+                                height: 20,
+                                fontSize: '10px',
+                                bgcolor: 'action.hover',
+                                cursor: 'pointer',
+                                '&:hover': { bgcolor: 'rgba(56,189,248,0.2)', color: '#38bdf8' }
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={inputMappingStr}
+                        onChange={(e) => setInputMappingStr(e.target.value)}
+                        disabled={isReadOnly}
+                        multiline
+                        rows={3}
+                        placeholder={`{\n  "pan": "context.panNumber",\n  "circle": "context.circleId",\n  "refId": "context.businessKey"\n}`}
+                        slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px', bgcolor: 'background.default' } } }}
+                      />
+
+                      {!isReadOnly && (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => {
+                              const sample = {};
+                              if (schemaFields.length > 0) {
+                                schemaFields.slice(0, 3).forEach(f => {
+                                  sample[f.fieldKey] = `context.${f.fieldKey}`;
+                                });
+                              } else {
+                                sample["businessKey"] = "context.businessKey";
+                                sample["trackingId"] = "context.trackingId";
+                              }
+                              setInputMappingStr(JSON.stringify(sample, null, 2));
+                            }}
+                            sx={{ fontSize: '10px', textTransform: 'none', color: '#38bdf8', p: 0 }}
+                          >
+                            Use Sample Outgoing Mapping
+                          </Button>
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* Incoming Response / Output Mapping Card */}
+                    <Paper elevation={0} sx={{ p: 1.5, bgcolor: 'background.paper', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 800, color: '#10b981', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            📥 Incoming Response Mapping
+                          </Typography>
+                          <Chip label="API ➔ Context" size="small" sx={{ height: 18, fontSize: '10px', bgcolor: 'rgba(16,185,129,0.15)', color: '#10b981', fontWeight: 700 }} />
+                        </Box>
+                        <Chip
+                          label={isValidJson(outputMappingStr) ? "Valid JSON" : "Invalid JSON"}
+                          size="small"
+                          color={isValidJson(outputMappingStr) ? "success" : "error"}
+                          variant="outlined"
+                          sx={{ height: 16, fontSize: '9px' }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontSize: '11px', lineHeight: 1.4 }}>
+                        Extracts fields from API response and writes them to workflow context. Format: <code>&#123;&quot;responseField&quot;: &quot;context.targetField&quot;&#125;</code>. Dotted paths like <code>data.score</code> are supported.
+                      </Typography>
+
+                      {/* Available Context Schema Variables chips */}
+                      {schemaFields && schemaFields.length > 0 && !isReadOnly && (
+                        <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption" sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 700 }}>
+                            + Target Context Var:
+                          </Typography>
+                          {schemaFields.map(f => (
+                            <Chip
+                              key={f.fieldKey}
+                              label={f.fieldKey}
+                              size="small"
+                              onClick={() => {
+                                let current = {};
+                                try { current = JSON.parse(outputMappingStr) || {}; } catch(e) {}
+                                current[f.fieldKey] = `context.${f.fieldKey}`;
+                                setOutputMappingStr(JSON.stringify(current, null, 2));
+                              }}
+                              sx={{
+                                height: 20,
+                                fontSize: '10px',
+                                bgcolor: 'action.hover',
+                                cursor: 'pointer',
+                                '&:hover': { bgcolor: 'rgba(16,185,129,0.2)', color: '#10b981' }
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={outputMappingStr}
+                        onChange={(e) => setOutputMappingStr(e.target.value)}
+                        disabled={isReadOnly}
+                        multiline
+                        rows={3}
+                        placeholder={`{\n  "status": "context.kycStatus",\n  "score": "context.creditScore",\n  "data.verified": "context.isVerified"\n}`}
+                        slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px', bgcolor: 'background.default' } } }}
+                      />
+
+                      {!isReadOnly && (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => {
+                              const sample = {
+                                "status": "context.kycStatus",
+                                "score": "context.creditScore"
+                              };
+                              setOutputMappingStr(JSON.stringify(sample, null, 2));
+                            }}
+                            sx={{ fontSize: '10px', textTransform: 'none', color: '#10b981', p: 0 }}
+                          >
+                            Use Sample Response Mapping
+                          </Button>
+                        </Box>
+                      )}
+                    </Paper>
+                  </Box>
+                </>)}
+
+                {/* 2. CREATE_BUCKET */}
                 {commandType === 'CREATE_BUCKET' && (<>
                   {registeredBuckets.length > 0 && !isReadOnly ? (<FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
                     <InputLabel sx={{ fontSize: '12px' }}>Target Bucket</InputLabel>
@@ -590,8 +1037,10 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   </Box>))}
                 </>)}
 
+                {/* 3. UPDATE_FORM_STATUS */}
                 {commandType === 'UPDATE_FORM_STATUS' && (<TextField fullWidth size="small" label="Form Status Value" value={formStatus} onChange={(e) => setFormStatus(e.target.value)} disabled={isReadOnly} placeholder="APPROVED" sx={{ mb: 1.5 }} />)}
 
+                {/* 4. START_CHILD_WORKFLOW */}
                 {(commandType === 'START_CHILD_WORKFLOW' || commandType === 'START_WORKFLOW') && (<>
                   {registeredWorkflows.length > 0 && !isReadOnly ? (<FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
                     <InputLabel sx={{ fontSize: '12px' }}>Child Workflow Key</InputLabel>
@@ -605,6 +1054,7 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   <TextField fullWidth size="small" label="Output Mapping (JSON)" value={outputMappingStr} onChange={(e) => setOutputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "childVar": "parentVar"\n}`} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} />
                 </>)}
 
+                {/* 5. EMIT_EVENT */}
                 {(commandType === 'EMIT_EVENT' || commandType === 'PUBLISH_EVENT') && (<>
                   {registeredEvents.length > 0 && !isReadOnly ? (<FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
                     <InputLabel sx={{ fontSize: '12px' }}>Event Key</InputLabel>
@@ -616,13 +1066,169 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   </FormControl>) : (<TextField fullWidth size="small" label="Event Key" value={eventType} onChange={(e) => setEventType(e.target.value)} disabled={isReadOnly} placeholder="PAYMENT_RECEIVED" sx={{ mb: 1.5 }} />)}
                   <TextField fullWidth size="small" label="Payload Mapping (JSON)" value={inputMappingStr} onChange={(e) => setInputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={4} placeholder={`{\n  "context['amount']": "amount",\n  "context.status": "status"\n}`} helperText={!isReadOnly ? "JSON mapping parent context SpEL expressions to outbound event payload keys" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
                 </>)}
+
+                {/* 6. Dynamic Parameter Renderer for any other Backend Commands (e.g. FINALIZE_CAF_SUBMISSION, MQ, Custom) */}
+                {(() => {
+                  const meta = availableCommands.find(c => c.type === commandType);
+                  if (!meta || !meta.parameters || meta.parameters.length === 0) return null;
+                  if (['REST', 'CALL_EXTERNAL_SYSTEM', 'HTTP', 'CREATE_BUCKET', 'UPDATE_FORM_STATUS', 'START_CHILD_WORKFLOW', 'START_WORKFLOW', 'EMIT_EVENT', 'PUBLISH_EVENT'].includes(commandType)) {
+                    return null;
+                  }
+
+                  return (
+                    <Box sx={{ border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 1.5, p: 1.5, mb: 1.5, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#38bdf8', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {meta.displayName || meta.type} Parameters
+                      </Typography>
+                      {meta.parameters.map(param => {
+                        const val = commandParams[param.name] !== undefined ? commandParams[param.name] : (param.defaultValue !== null && param.defaultValue !== undefined ? param.defaultValue : '');
+                        const handleChange = (newVal) => {
+                          setCommandParams(prev => ({ ...prev, [param.name]: newVal }));
+                        };
+
+                        if (param.type === 'select') {
+                          let options = param.options || [];
+                          if (param.dataSource === 'INTEGRATIONS') {
+                            options = registeredIntegrations.map(i => ({ label: `${i.name} (${i.integrationKey})`, value: i.integrationKey }));
+                          } else if (param.dataSource === 'BUCKETS') {
+                            options = registeredBuckets.map(b => ({ label: `${b.name} (${b.bucketId})`, value: b.bucketId }));
+                          } else if (param.dataSource === 'WORKFLOWS') {
+                            options = registeredWorkflows.map(w => ({ label: `${w.name} (${w.key})`, value: w.key }));
+                          } else if (param.dataSource === 'EVENTS') {
+                            options = registeredEvents.map(ev => ({ label: `${ev.name} (${ev.eventKey})`, value: ev.eventKey }));
+                          }
+
+                          return (
+                            <FormControl key={param.name} fullWidth size="small" sx={{ mb: 1.5 }}>
+                              <InputLabel sx={{ fontSize: '12px' }}>{param.label}{param.required ? ' *' : ''}</InputLabel>
+                              <Select
+                                label={`${param.label}${param.required ? ' *' : ''}`}
+                                value={val}
+                                onChange={(e) => handleChange(e.target.value)}
+                                disabled={isReadOnly}
+                                sx={{ fontSize: '12px' }}
+                              >
+                                {options.map(opt => (
+                                  <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: '12px' }}>
+                                    {opt.label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          );
+                        }
+
+                        if (param.type === 'number') {
+                          return (
+                            <TextField
+                              key={param.name}
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label={param.label + (param.required ? ' *' : '')}
+                              value={val}
+                              onChange={(e) => handleChange(e.target.value === '' ? '' : Number(e.target.value))}
+                              disabled={isReadOnly}
+                              placeholder={param.placeholder}
+                              helperText={param.description}
+                              sx={{ mb: 1.5 }}
+                            />
+                          );
+                        }
+
+                        if (param.type === 'json') {
+                          return (
+                            <TextField
+                              key={param.name}
+                              fullWidth
+                              size="small"
+                              multiline
+                              rows={3}
+                              label={param.label + (param.required ? ' *' : '')}
+                              value={typeof val === 'object' ? JSON.stringify(val, null, 2) : val}
+                              onChange={(e) => handleChange(e.target.value)}
+                              disabled={isReadOnly}
+                              placeholder={param.placeholder || '{}'}
+                              helperText={param.description}
+                              slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }}
+                              sx={{ mb: 1.5 }}
+                            />
+                          );
+                        }
+
+                        return (
+                          <TextField
+                            key={param.name}
+                            fullWidth
+                            size="small"
+                            label={param.label + (param.required ? ' *' : '')}
+                            value={val}
+                            onChange={(e) => handleChange(e.target.value)}
+                            disabled={isReadOnly}
+                            placeholder={param.placeholder}
+                            helperText={param.description}
+                            sx={{ mb: 1.5 }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  );
+                })()}
               </>)}
 
               {/* WAIT_EVENT fields */}
               {nodeType === 'WAIT_EVENT' && (<>
                 <TextField fullWidth size="small" label="Event Type" value={eventType} onChange={(e) => setEventType(e.target.value)} disabled={isReadOnly} placeholder="KAFKA_PAYMENT" helperText={!isReadOnly ? "Correlation event name to wait for (e.g. PAYMENT_COMPLETED)" : undefined} sx={{ mb: 1.5 }} />
 
-                <TextField fullWidth size="small" label="Selective Payload Mapping (JSON)" value={payloadMappingStr} onChange={(e) => setPayloadMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "transactionId": "paymentTxId",\n  "amount": "paymentAmount"\n}`} helperText={!isReadOnly ? "JSON mapping inbound Kafka payload keys to context keys" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
+                <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'background.paper', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#f59e0b', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                        📥 Event Payload ➔ Context Mapping
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={isValidJson(payloadMappingStr) ? "Valid JSON" : "Invalid JSON"}
+                      size="small"
+                      color={isValidJson(payloadMappingStr) ? "success" : "error"}
+                      variant="outlined"
+                      sx={{ height: 16, fontSize: '9px' }}
+                    />
+                  </Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontSize: '11px' }}>
+                    Maps incoming Kafka event payload fields into workflow context variables (e.g. <code>&#123;&quot;eventField&quot;: &quot;contextVar&quot;&#125;</code>).
+                  </Typography>
+
+                  {schemaFields && schemaFields.length > 0 && !isReadOnly && (
+                    <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 700 }}>
+                        + Target Context Var:
+                      </Typography>
+                      {schemaFields.map(f => (
+                        <Chip
+                          key={f.fieldKey}
+                          label={f.fieldKey}
+                          size="small"
+                          onClick={() => {
+                            let current = {};
+                            try { current = JSON.parse(payloadMappingStr) || {}; } catch(e) {}
+                            current[f.fieldKey] = f.fieldKey;
+                            setPayloadMappingStr(JSON.stringify(current, null, 2));
+                          }}
+                          sx={{
+                            height: 20,
+                            fontSize: '10px',
+                            bgcolor: 'action.hover',
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: 'rgba(245,158,11,0.2)', color: '#f59e0b' }
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+
+                  <TextField fullWidth size="small" value={payloadMappingStr} onChange={(e) => setPayloadMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "transactionId": "paymentTxId",\n  "amount": "paymentAmount"\n}`} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px', bgcolor: 'background.default' } } }} />
+                </Paper>
 
                 <TextField fullWidth size="small" label="Payload Routes (JSON Array)" value={routesStr} onChange={(e) => setRoutesStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`[\n  { "value": "APPROVED", "target": "NODE_APPROVED" },\n  { "value": "REJECTED", "target": "NODE_REJECTED" }\n]`} helperText={!isReadOnly ? "Map payload outcomes to target node IDs" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
 
@@ -645,9 +1251,9 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   </Select>
                 </FormControl>) : (<TextField fullWidth size="small" label="Child Workflow Key" value={childWorkflowKey} onChange={(e) => setChildWorkflowKey(e.target.value)} disabled={isReadOnly} placeholder="CHILD_FLOW_KEY" sx={{ mb: 1.5 }} />)}
 
-                <TextField fullWidth size="small" label="Input Mapping (JSON)" value={inputMappingStr} onChange={(e) => setInputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={4} placeholder={`{\n  "parentVar": "childVar"\n}`} helperText={!isReadOnly ? "JSON mapping parent context vars to child inputs" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
+                <TextField fullWidth size="small" label="📤 Input Mapping (Parent Context ➔ Child Context)" value={inputMappingStr} onChange={(e) => setInputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "parentVar": "childVar"\n}`} helperText={!isReadOnly ? "JSON mapping parent context variables to child workflow inputs" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
 
-                <TextField fullWidth size="small" label="Output Mapping (JSON)" value={outputMappingStr} onChange={(e) => setOutputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={4} placeholder={`{\n  "childVar": "parentVar"\n}`} helperText={!isReadOnly ? "JSON mapping child outputs to parent context vars" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} />
+                <TextField fullWidth size="small" label="📥 Output Mapping (Child Context ➔ Parent Context)" value={outputMappingStr} onChange={(e) => setOutputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "childVar": "parentVar"\n}`} helperText={!isReadOnly ? "JSON mapping child workflow outputs back into parent context" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} />
               </>)}
             </Box>
           </Box>

@@ -137,12 +137,17 @@ public class ActivationBasedEngine {
                 step.setNodeId(node.getId());
                 step.setNodeType(nodeType);
                 step.setLabel(Optional.ofNullable(node.getLabel()).orElse(nodeType));
-                step.setEnteredAt(LocalDateTime.now());
+                // If the node is non-idempotent (external side-effects or async/suspension boundary),
+                // flush all prior in-memory tasks (including skipped dead paths) as a durable checkpoint.
+                if (!taskRecorder.isIdempotent(node)) {
+                    taskRecorder.flushPendingTasks(instanceId);
+                }
 
                 switch (nodeType) {
                     case "BUCKET" -> {
                         var ti = taskRecorder.recordTaskStart(instance, node, state.context);
                         taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
+                        taskRecorder.flushPendingTasks(instanceId);
                         step.setStatus("WAITING");
                         step.setNotes("Suspended execution. Waiting on business outcome bucket: " + step.getLabel());
                         step.setExitedAt(LocalDateTime.now());
@@ -183,6 +188,7 @@ public class ActivationBasedEngine {
                     case "WAIT_EVENT" -> {
                         var ti = taskRecorder.recordTaskStart(instance, node, state.context);
                         taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
+                        taskRecorder.flushPendingTasks(instanceId);
                         String eventType = traversalHelper.extractString(node.getData(), "eventType");
                         if (eventType == null || eventType.isBlank()) eventType = "GENERIC_EVENT";
                         step.setStatus("WAITING");
@@ -268,6 +274,9 @@ public class ActivationBasedEngine {
                 }
             }
         }
+
+        // Ensure all remaining in-memory tasks (including skipped dead-paths) are flushed in a single batch
+        taskRecorder.flushPendingTasks(instanceId);
 
         return new GraphTraversalEngine.TraversalResult(trace, suspended, suspendedNodeId, suspendedNodeLabel,
                 outcomeBucketId, runtimeGraph);

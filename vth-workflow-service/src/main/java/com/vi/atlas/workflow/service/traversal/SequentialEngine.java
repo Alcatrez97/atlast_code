@@ -108,9 +108,20 @@ public class SequentialEngine {
             step.setLabel(Optional.ofNullable(currentNode.getLabel()).orElse(nodeType));
             step.setEnteredAt(LocalDateTime.now());
 
+            // If the node is non-idempotent (external side-effect or stateful boundary),
+            // flush prior in-memory tasks to establish a durable database checkpoint.
+            if (!taskRecorder.isIdempotent(currentNode)) {
+                taskRecorder.flushPendingTasks(instanceId);
+            }
+
             // Delegate to the appropriate NodeExecutor
             NodeExecutor executor = nodeExecutorRegistry.get(nodeType);
             NodeExecutionResult result = executor.execute(currentNode, state, step, trace);
+
+            // If the node resulted in suspension (WAIT_EVENT, BUCKET, etc.), flush immediately
+            if (result.isSuspended()) {
+                taskRecorder.flushPendingTasks(instanceId);
+            }
 
             // If the executor already added the step to trace (suspend cases), skip reâ€‘adding
             if (!trace.contains(step)) {
@@ -147,6 +158,9 @@ public class SequentialEngine {
         if (stepIdx[0] >= MAX_STEPS) {
             log.warn("Traversal halted: exceeded max steps ({}) for workflow '{}'", MAX_STEPS, version.getWorkflowDefinition().getKey());
         }
+
+        // Ensure all remaining in-memory tasks are flushed in a single batch
+        taskRecorder.flushPendingTasks(instanceId);
 
         // Build result from collected suspended nodes
         if (!suspendedNodes.isEmpty()) {
