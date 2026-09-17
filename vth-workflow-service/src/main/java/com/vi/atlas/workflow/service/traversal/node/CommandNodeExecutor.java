@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -55,7 +55,7 @@ public class CommandNodeExecutor implements NodeExecutor {
                                     String instanceId,
                                     String contextId,
                                     com.vi.atlas.workflow.entity.WorkflowVersion version,
-                                    StandardEvaluationContext spelCtx);
+                                    EvaluationContext spelCtx);
     }
 
     @FunctionalInterface

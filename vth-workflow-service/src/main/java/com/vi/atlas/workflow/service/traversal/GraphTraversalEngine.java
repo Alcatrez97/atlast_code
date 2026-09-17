@@ -14,7 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -133,11 +133,8 @@ public class GraphTraversalEngine {
         Map<String, List<WorkflowEdgeDto>> edgesBySource = compiled.getRawOutgoingEdges();
         Map<String, List<WorkflowEdgeDto>> edgesByTarget = compiled.getRawIncomingEdges();
 
-        // ---- SpEL context ----
-        Map<String, Object> root = Map.of("context", context);
-        StandardEvaluationContext spelCtx = new StandardEvaluationContext(root);
-        spelCtx.addPropertyAccessor(new org.springframework.context.expression.MapAccessor());
-        spelCtx.setVariable("context", context);
+        // ---- SpEL context (security-hardened SimpleEvaluationContext) ----
+        EvaluationContext spelCtx = SpelEvaluator.createEvaluationContext(context);
 
         // ---- Load workflow instance & runtime graph ----
         WorkflowInstance instance = null;
@@ -258,7 +255,7 @@ public class GraphTraversalEngine {
                                                     String instanceId,
                                                     String contextId,
                                                     WorkflowVersion version,
-                                                    StandardEvaluationContext spelCtx) {
+                                                    EvaluationContext spelCtx) {
         String tempType = extractString(node.getData(), "commandType");
         if (tempType == null) tempType = extractString(node.getData(), "type");
         if (tempType == null) {
@@ -382,8 +379,7 @@ public class GraphTraversalEngine {
             TraversalContextHolder.remove();
             try {
                 Thread.sleep(150);
-                StandardEvaluationContext bgSpel = new StandardEvaluationContext();
-                bgSpel.setVariable("context", backgroundContext);
+                EvaluationContext bgSpel = SpelEvaluator.createEvaluationContext(backgroundContext);
                 Map<String, Object> commandOutput =
                         executeCommandNode(node, instance, backgroundContext, instanceId, contextId, version, bgSpel);
                 eventRoutingService.routeEvent(eventType, instance.getBusinessKey(), commandOutput);

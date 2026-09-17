@@ -4,7 +4,7 @@ import com.vi.atlas.common.dto.WorkflowEdgeDto;
 import com.vi.atlas.common.dto.WorkflowNodeDto;
 import com.vi.atlas.workflow.entity.WorkflowInstance;
 import com.vi.atlas.workflow.entity.WorkflowVersion;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 
 import java.util.List;
 import java.util.Map;
@@ -31,7 +31,7 @@ public class TraversalExecutionState {
     // ---- Live execution context (mutable by node executors) ----
 
     public final Map<String, Object> context;
-    public final StandardEvaluationContext spelCtx;
+    public final EvaluationContext spelCtx;
 
     // ---- Graph index ----
 
@@ -59,7 +59,7 @@ public class TraversalExecutionState {
             String contextId,
             WorkflowInstance instance,
             Map<String, Object> context,
-            StandardEvaluationContext spelCtx,
+            EvaluationContext spelCtx,
             Map<String, WorkflowNodeDto> nodeMap,
             Map<String, List<WorkflowEdgeDto>> edgesBySource,
             Map<String, List<WorkflowEdgeDto>> edgesByTarget,

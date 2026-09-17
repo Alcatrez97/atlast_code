@@ -13,7 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
+import com.vi.atlas.workflow.service.traversal.SpelEvaluator;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -110,10 +111,7 @@ public class ContextResolutionService {
             // Scenario A: Derived Expression (SpEL formula)
             if (field.getExpression() != null && !field.getExpression().isBlank()) {
                 contextMap.logEvent(fieldKey, "DERIVED_EXPRESSION_EVAL", "Evaluating SpEL derived expression: " + field.getExpression());
-                Map<String, Object> root = Map.of("context", contextMap);
-                StandardEvaluationContext spelCtx = new StandardEvaluationContext(root);
-                spelCtx.addPropertyAccessor(new org.springframework.context.expression.MapAccessor());
-                spelCtx.setVariable("context", contextMap);
+                EvaluationContext spelCtx = SpelEvaluator.createEvaluationContext(contextMap);
                 Expression expr = SPEL_PARSER.parseExpression(field.getExpression());
                 result = expr.getValue(spelCtx);
             } 

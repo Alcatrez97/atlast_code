@@ -6,7 +6,8 @@ import com.vi.atlas.workflow.entity.Rule;
 import com.vi.atlas.workflow.repository.RuleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
+import com.vi.atlas.workflow.service.traversal.SpelEvaluator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -133,10 +134,7 @@ public class RuleService {
         if (expression == null || expression.trim().isEmpty()) {
             throw new IllegalArgumentException("Expression cannot be empty.");
         }
-        Map<String, Object> root = Map.of("context", context != null ? context : Map.of());
-        StandardEvaluationContext spelCtx = new StandardEvaluationContext(root);
-        spelCtx.addPropertyAccessor(new org.springframework.context.expression.MapAccessor());
-        spelCtx.setVariable("context", context != null ? context : Map.of());
+        EvaluationContext spelCtx = SpelEvaluator.createEvaluationContext(context);
         return parser.parseExpression(expression).getValue(spelCtx);
     }
 

@@ -2,7 +2,7 @@ package com.vi.atlas.workflow.service.traversal;
 
 import com.vi.atlas.common.dto.WorkflowEdgeDto;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -45,7 +45,7 @@ public class EdgeSelector {
      * </ol>
      */
     public WorkflowEdgeDto chooseEdge(List<WorkflowEdgeDto> edges,
-                                      StandardEvaluationContext spelCtx,
+                                      EvaluationContext spelCtx,
                                       boolean ruleResult) {
         for (WorkflowEdgeDto edge : edges) {
             String cond = extractString(edge.getData(), "condition");
@@ -82,7 +82,7 @@ public class EdgeSelector {
      */
     public WorkflowEdgeDto matchDecisionEdge(List<WorkflowEdgeDto> edges,
                                               Object fieldValue,
-                                              StandardEvaluationContext spelCtx) {
+                                              EvaluationContext spelCtx) {
         String fieldStr = fieldValue != null ? String.valueOf(fieldValue) : "";
         for (WorkflowEdgeDto edge : edges) {
             String cond = extractString(edge.getData(), "condition");
@@ -111,7 +111,7 @@ public class EdgeSelector {
      */
     public WorkflowEdgeDto chooseBucketEdgeByOutcome(List<WorkflowEdgeDto> outEdges,
                                                       String outcome,
-                                                      StandardEvaluationContext spelCtx) {
+                                                      EvaluationContext spelCtx) {
         if (outcome != null) {
             for (WorkflowEdgeDto edge : outEdges) {
                 if (edge.getData() != null) {
@@ -145,7 +145,7 @@ public class EdgeSelector {
     public boolean isBucketEdgeTaken(WorkflowEdgeDto edge,
                                       String outcome,
                                       List<WorkflowEdgeDto> allOutEdges,
-                                      StandardEvaluationContext spelCtx) {
+                                      EvaluationContext spelCtx) {
         if (outcome == null) return false;
 
         // 1. Explicit outcomeType match

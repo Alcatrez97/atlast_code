@@ -15,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -56,7 +56,7 @@ public class ActivationBasedEngine {
             List<Map<String, Object>> activeEdges,
             Map<String, Object> runtimeGraph,
             List<WorkflowNodeDto> suspendedNodes,
-            StandardEvaluationContext spelCtx,
+            EvaluationContext spelCtx,
             WorkflowInstance instance,
             String instanceId,
             String contextId,

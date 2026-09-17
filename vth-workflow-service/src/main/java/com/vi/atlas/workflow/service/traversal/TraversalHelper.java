@@ -7,7 +7,7 @@ import com.vi.atlas.workflow.service.traversal.TraversalContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -36,7 +36,7 @@ public class TraversalHelper {
         public boolean isBypassed;
     }
 
-    public ActivationDecision evaluateActivation(WorkflowNodeDto node, String nodeId, String instanceId, StandardEvaluationContext spelCtx) {
+    public ActivationDecision evaluateActivation(WorkflowNodeDto node, String nodeId, String instanceId, EvaluationContext spelCtx) {
         ActivationDecision d = new ActivationDecision();
         if ("START".equalsIgnoreCase(node.getType())) {
             d.canEvaluate = true;
@@ -135,7 +135,7 @@ public class TraversalHelper {
         return d;
     }
 
-    public boolean evaluateBusinessEligibility(WorkflowNodeDto node, StandardEvaluationContext spelCtx) {
+    public boolean evaluateBusinessEligibility(WorkflowNodeDto node, EvaluationContext spelCtx) {
         String rule = extractString(node.getData(), "businessEligibilityRule");
         if (rule == null || rule.isBlank()) rule = extractString(node.getData(), "activationCondition");
         if (rule == null || rule.isBlank()) return true;

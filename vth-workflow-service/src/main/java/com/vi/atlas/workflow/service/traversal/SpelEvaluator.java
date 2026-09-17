@@ -2,11 +2,12 @@ package com.vi.atlas.workflow.service.traversal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.EvaluationException;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -21,9 +22,10 @@ import java.util.regex.Pattern;
  * <p>Responsibilities:
  * <ul>
  *   <li>Thread-safe, application-scoped expression cache (avoids repeated parse overhead)</li>
- *   <li>{@link #evaluate(String, StandardEvaluationContext)} â€” safe evaluation that returns
+ *   <li>Factory for security-hardened {@link SimpleEvaluationContext} (blocks arbitrary reflection/code execution)</li>
+ *   <li>{@link #evaluate(String, EvaluationContext)} — safe evaluation that returns
  *       {@code null} on any error instead of propagating an exception</li>
- *   <li>{@link #explain(String, Map, Object)} â€” human-readable explanation of an evaluation
+ *   <li>{@link #explain(String, Map, Object)} — human-readable explanation of an evaluation
  *       result (used in step trace notes)</li>
  * </ul>
  */
@@ -45,13 +47,37 @@ public class SpelEvaluator {
     private static final Pattern DOT_VAR     = Pattern.compile("context\\.([a-zA-Z0-9_]+)");
 
     /**
+     * Creates a security-hardened {@link SimpleEvaluationContext} for safe SpEL evaluation.
+     * Prevents arbitrary Java class reflection, constructor invocation, and code execution.
+     *
+     * @param context the runtime context map
+     * @return a configured SimpleEvaluationContext
+     */
+    public static SimpleEvaluationContext createEvaluationContext(Map<String, Object> context) {
+        Map<String, Object> ctx = context != null ? context : Map.of();
+        Map<String, Object> root = new HashMap<>(ctx);
+        root.put("context", ctx);
+
+        SimpleEvaluationContext spelCtx = SimpleEvaluationContext
+                .forPropertyAccessors(
+                        new org.springframework.context.expression.MapAccessor(),
+                        org.springframework.expression.spel.support.DataBindingPropertyAccessor.forReadOnlyAccess()
+                )
+                .withRootObject(root)
+                .withInstanceMethods()
+                .build();
+        spelCtx.setVariable("context", ctx);
+        return spelCtx;
+    }
+
+    /**
      * Evaluates a SpEL expression against the supplied context.
      *
      * @param expression the SpEL expression string (may be {@code null} or blank)
      * @param spelCtx    the evaluation context containing the {@code context} variable
      * @return the evaluation result, or {@code null} if the expression is blank / fails
      */
-    public Object evaluate(String expression, StandardEvaluationContext spelCtx) {
+    public Object evaluate(String expression, EvaluationContext spelCtx) {
         if (expression == null || expression.isBlank()) return null;
         try {
             Expression parsed = EXPRESSION_CACHE.computeIfAbsent(expression, PARSER::parseExpression);

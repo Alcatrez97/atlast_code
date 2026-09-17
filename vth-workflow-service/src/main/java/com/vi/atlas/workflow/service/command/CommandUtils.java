@@ -2,7 +2,8 @@ package com.vi.atlas.workflow.service.command;
 
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.EvaluationContext;
+import com.vi.atlas.workflow.service.traversal.SpelEvaluator;
 
 import java.util.*;
 
@@ -68,11 +69,9 @@ public final class CommandUtils {
         }
 
         Map<String, Object> globalContext = (Map<String, Object>) input.get("_context");
-        StandardEvaluationContext spelCtx = null;
+        EvaluationContext spelCtx = null;
         if (globalContext != null) {
-            spelCtx = new StandardEvaluationContext(Map.of("context", globalContext));
-            spelCtx.addPropertyAccessor(new org.springframework.context.expression.MapAccessor());
-            spelCtx.setVariable("context", globalContext);
+            spelCtx = SpelEvaluator.createEvaluationContext(globalContext);
         }
 
         for (Map.Entry<?, ?> entry : mapping.entrySet()) {
