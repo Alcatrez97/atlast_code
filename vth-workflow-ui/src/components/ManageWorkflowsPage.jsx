@@ -295,10 +295,24 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
                     </TableCell>
                   </TableRow>) : (paginatedWorkflows.map((row) => (<TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: 'rgba(0,0,0,0.01) !important' } }}>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
+                        <Typography
+                          variant="body2"
+                          onClick={() => onOpenVersions(row)}
+                          sx={{
+                            fontWeight: 600,
+                            color: 'text.primary',
+                            cursor: 'pointer',
+                            display: 'inline-block',
+                            transition: 'color 0.15s ease',
+                            '&:hover': {
+                              color: 'primary.main',
+                              textDecoration: 'underline'
+                            }
+                          }}
+                        >
                           {row.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {row.description || 'No description provided'}
                         </Typography>
                       </TableCell>
