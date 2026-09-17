@@ -302,23 +302,6 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       }
       else if (nodeType === 'WAIT_EVENT') {
         updatedData.eventType = eventType;
-        try {
-          updatedData.payloadMapping = JSON.parse(payloadMappingStr || '{}');
-        }
-        catch (e) {
-          alert('Invalid JSON in Selective Payload Mapping');
-          setIsSaving(false);
-          return;
-        }
-        try {
-          updatedData.routes = JSON.parse(routesStr || '[]');
-        }
-        catch (e) {
-          alert('Invalid JSON in Routes configuration');
-          setIsSaving(false);
-          return;
-        }
-        updatedData.defaultRoute = defaultRoute;
       }
       await onSaveNode(node.id, { label, data: updatedData });
       setSaved(true);
@@ -1177,63 +1160,67 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
               </>)}
 
               {/* WAIT_EVENT fields */}
-              {nodeType === 'WAIT_EVENT' && (<>
-                <TextField fullWidth size="small" label="Event Type" value={eventType} onChange={(e) => setEventType(e.target.value)} disabled={isReadOnly} placeholder="KAFKA_PAYMENT" helperText={!isReadOnly ? "Correlation event name to wait for (e.g. PAYMENT_COMPLETED)" : undefined} sx={{ mb: 1.5 }} />
+              {nodeType === 'WAIT_EVENT' && (() => {
+                const selectedEventDef = registeredEvents.find(e => e.eventKey === eventType);
+                return (
+                  <>
+                    <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                      <InputLabel id="event-type-select-label" sx={{ fontSize: '12px' }}>Event (from Event Registry)</InputLabel>
+                      <Select
+                        labelId="event-type-select-label"
+                        label="Event (from Event Registry)"
+                        value={eventType}
+                        onChange={(e) => setEventType(e.target.value)}
+                        disabled={isReadOnly}
+                        sx={{ fontSize: '13px' }}
+                      >
+                        {registeredEvents.length === 0 && (
+                          <MenuItem value="" disabled sx={{ fontSize: '12px' }}>
+                            <em>No events found in Event Registry</em>
+                          </MenuItem>
+                        )}
+                        {registeredEvents.map(ev => (
+                          <MenuItem key={ev.id || ev.eventKey} value={ev.eventKey} sx={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                            <span>{ev.name ? `${ev.name} (${ev.eventKey})` : ev.eventKey}</span>
+                          </MenuItem>
+                        ))}
+                        {eventType && !registeredEvents.some(ev => ev.eventKey === eventType) && (
+                          <MenuItem value={eventType} sx={{ fontSize: '12px' }}>
+                            {eventType} <em>(custom)</em>
+                          </MenuItem>
+                        )}
+                      </Select>
+                    </FormControl>
 
-                <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'background.paper', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#f59e0b', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                        📥 Event Payload ➔ Context Mapping
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={isValidJson(payloadMappingStr) ? "Valid JSON" : "Invalid JSON"}
-                      size="small"
-                      color={isValidJson(payloadMappingStr) ? "success" : "error"}
-                      variant="outlined"
-                      sx={{ height: 16, fontSize: '9px' }}
-                    />
-                  </Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontSize: '11px' }}>
-                    Maps incoming Kafka event payload fields into workflow context variables (e.g. <code>&#123;&quot;eventField&quot;: &quot;contextVar&quot;&#125;</code>).
-                  </Typography>
-
-                  {schemaFields && schemaFields.length > 0 && !isReadOnly && (
-                    <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 700 }}>
-                        + Target Context Var:
-                      </Typography>
-                      {schemaFields.map(f => (
-                        <Chip
-                          key={f.fieldKey}
-                          label={f.fieldKey}
-                          size="small"
-                          onClick={() => {
-                            let current = {};
-                            try { current = JSON.parse(payloadMappingStr) || {}; } catch(e) {}
-                            current[f.fieldKey] = f.fieldKey;
-                            setPayloadMappingStr(JSON.stringify(current, null, 2));
-                          }}
-                          sx={{
-                            height: 20,
-                            fontSize: '10px',
-                            bgcolor: 'action.hover',
-                            cursor: 'pointer',
-                            '&:hover': { bgcolor: 'rgba(245,158,11,0.2)', color: '#f59e0b' }
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  )}
-
-                  <TextField fullWidth size="small" value={payloadMappingStr} onChange={(e) => setPayloadMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "transactionId": "paymentTxId",\n  "amount": "paymentAmount"\n}`} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px', bgcolor: 'background.default' } } }} />
-                </Paper>
-
-                <TextField fullWidth size="small" label="Payload Routes (JSON Array)" value={routesStr} onChange={(e) => setRoutesStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`[\n  { "value": "APPROVED", "target": "NODE_APPROVED" },\n  { "value": "REJECTED", "target": "NODE_REJECTED" }\n]`} helperText={!isReadOnly ? "Map payload outcomes to target node IDs" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
-
-                <TextField fullWidth size="small" label="Default Route (Target Node ID)" value={defaultRoute} onChange={(e) => setDefaultRoute(e.target.value)} disabled={isReadOnly} placeholder="NODE_DEFAULT" helperText={!isReadOnly ? "Fallback node ID if no route matches" : undefined} />
-              </>)}
+                    {selectedEventDef && (
+                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'background.paper', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 2 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: '#f59e0b', display: 'block', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          ⚡ Event Details
+                        </Typography>
+                        {selectedEventDef.description && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.75, fontSize: '11px' }}>
+                            {selectedEventDef.description}
+                          </Typography>
+                        )}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '11px' }}>
+                          {selectedEventDef.kafkaTopic && (
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Topic:</Typography>
+                              <code style={{ fontSize: '10px', background: 'rgba(255,255,255,0.06)', padding: '1px 4px', borderRadius: 4 }}>{selectedEventDef.kafkaTopic}</code>
+                            </Box>
+                          )}
+                          {selectedEventDef.correlationKeyPath && (
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Correlation Path:</Typography>
+                              <code style={{ fontSize: '10px', background: 'rgba(255,255,255,0.06)', padding: '1px 4px', borderRadius: 4 }}>{selectedEventDef.correlationKeyPath}</code>
+                            </Box>
+                          )}
+                        </Box>
+                      </Paper>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* SUB_WORKFLOW fields */}
               {nodeType === 'SUB_WORKFLOW' && (<>
