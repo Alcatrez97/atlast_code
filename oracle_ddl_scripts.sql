@@ -2,10 +2,11 @@
 -- ATLAS WORKFLOW & DECISION ENGINE - ORACLE DATABASE DDL SCRIPT
 -- =============================================================================
 -- Target Database: Oracle Database 12c / 18c / 19c / 21c / 23c
--- Generated Date: 2026-08-20
--- Description: Complete production-ready DDL script with 'workflow_' prefix for all tables,
+-- Generated Date: 2026-09-18
+-- Description: Complete production-ready DDL script with 'workflow_' prefix for all 17 tables,
 --              including DROP statements, TABLE definitions, PRIMARY KEYS, FOREIGN KEYS,
 --              UNIQUE CONSTRAINTS, CHECK CONSTRAINTS, and INDEXES.
+--              Fully synchronized with JPA Entities in com.vi.atlas.workflow.entity.*
 -- =============================================================================
 
 SET DEFINE OFF;
@@ -17,6 +18,12 @@ ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';
 
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE workflow_execution_log_details CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_bucket_executions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -41,12 +48,6 @@ END;
 
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE workflow_task_instances CASCADE CONSTRAINTS';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
-END;
-/
-
-BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_bucket_executions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -82,13 +83,13 @@ END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_definitions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_integration_registry CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_integration_registry CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_definitions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -107,6 +108,12 @@ END;
 
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE workflow_customer_forms CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_staged_payloads CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -154,6 +161,7 @@ CREATE TABLE workflow_versions (
 );
 
 CREATE INDEX idx_wf_ver_status ON workflow_versions(status);
+CREATE INDEX idx_wf_ver_def_id ON workflow_versions(workflow_definition_id);
 
 
 -- =============================================================================
@@ -184,6 +192,7 @@ CREATE INDEX idx_inst_wf_key ON workflow_instances(workflow_key);
 CREATE INDEX idx_inst_status ON workflow_instances(status);
 CREATE INDEX idx_inst_created_at ON workflow_instances(created_at);
 CREATE INDEX idx_inst_biz_key ON workflow_instances(business_key);
+CREATE INDEX idx_inst_version_id ON workflow_instances(version_id);
 
 
 -- 4. WORKFLOW TASK INSTANCES TABLE
@@ -232,17 +241,17 @@ CREATE INDEX idx_event_sub_lookup ON workflow_event_subscriptions(business_key, 
 
 
 -- =============================================================================
--- SECTION 4: AUDIT, LOGGING & REVERT TABLES (DECOUPLED FOR HIGH THROUGHPUT)
+-- SECTION 4: AUDIT, LOGGING & REVERT TABLES (VERTICAL PARTITIONING)
 -- =============================================================================
 
--- 6. WORKFLOW EXECUTION LOGS TABLE
+-- 6. WORKFLOW EXECUTION LOGS TABLE (LIGHTWEIGHT SUMMARY)
 CREATE TABLE workflow_execution_logs (
     execution_log_pk        VARCHAR2(36 CHAR) NOT NULL,
     workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     version_id              VARCHAR2(36 CHAR),
     version_number          NUMBER(10,0),
     context_id              VARCHAR2(100 CHAR),
-    instance_id             VARCHAR2(36 CHAR), -- Decoupled String ID reference
+    instance_id             VARCHAR2(36 CHAR),
     circle_id               NUMBER(10,0),
     status                  VARCHAR2(20 CHAR) NOT NULL,
     outcome_node_id         VARCHAR2(100 CHAR),
@@ -263,40 +272,42 @@ CREATE INDEX idx_exec_wf_key ON workflow_execution_logs(workflow_key);
 CREATE INDEX idx_exec_status ON workflow_execution_logs(status);
 CREATE INDEX idx_exec_started_at ON workflow_execution_logs(started_at);
 CREATE INDEX idx_exec_inst_id ON workflow_execution_logs(instance_id);
+CREATE INDEX idx_exec_version_id ON workflow_execution_logs(version_id);
 
 
--- 7. WORKFLOW EXECUTION LOG DETAILS TABLE
+-- 7. WORKFLOW EXECUTION LOG DETAILS TABLE (VERTICAL PARTITION 1:1 WITH EXECUTION LOG)
 CREATE TABLE workflow_execution_log_details (
-    execution_log_detail_pk VARCHAR2(36 CHAR) NOT NULL,
-    execution_log_id        VARCHAR2(36 CHAR) NOT NULL,
-    step_index              NUMBER(10,0) NOT NULL,
-    node_id                 VARCHAR2(100 CHAR) NOT NULL,
-    node_type               VARCHAR2(50 CHAR) NOT NULL,
-    status                  VARCHAR2(30 CHAR) NOT NULL,
-    input_context           CLOB,
-    output_context          CLOB,
-    duration_ms             NUMBER(19,0),
-    timestamp               TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_exec_detail PRIMARY KEY (execution_log_detail_pk),
-    CONSTRAINT fk_exec_detail_log FOREIGN KEY (execution_log_id) 
+    log_id                  VARCHAR2(36 CHAR) NOT NULL,
+    input_context_json      CLOB,
+    execution_trace_json    CLOB,
+    CONSTRAINT pk_exec_detail PRIMARY KEY (log_id),
+    CONSTRAINT fk_exec_detail_log FOREIGN KEY (log_id) 
         REFERENCES workflow_execution_logs(execution_log_pk) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_exec_detail_log ON workflow_execution_log_details(execution_log_id);
 
 
 -- 8. WORKFLOW REVERT STATUS TABLE
 CREATE TABLE workflow_revert_status (
     revert_status_pk        VARCHAR2(36 CHAR) NOT NULL,
-    workflow_instance_id    VARCHAR2(36 CHAR) NOT NULL, -- Decoupled String ID reference
-    node_id                 VARCHAR2(100 CHAR) NOT NULL,
-    revert_state            VARCHAR2(50 CHAR) NOT NULL,
+    workflow_instance_id    VARCHAR2(36 CHAR) NOT NULL,
+    form_id                 VARCHAR2(100 CHAR) NOT NULL,
+    bucket_id               VARCHAR2(100 CHAR) NOT NULL,
+    bucket_name             VARCHAR2(255 CHAR),
+    status                  VARCHAR2(30 CHAR) NOT NULL, -- PENDING, COMPLETED, REVERTED
+    previous_step_id        VARCHAR2(36 CHAR),
+    dependency_bucket_ids   VARCHAR2(1000 CHAR),
+    resolved_by             VARCHAR2(100 CHAR),
+    resolution_notes        VARCHAR2(2000 CHAR),
     circle_id               NUMBER(10,0),
-    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    completed_at            TIMESTAMP(6),
     CONSTRAINT pk_revert_status PRIMARY KEY (revert_status_pk)
 );
 
 CREATE INDEX idx_revert_inst_id ON workflow_revert_status(workflow_instance_id);
+CREATE INDEX idx_revert_form_id ON workflow_revert_status(form_id);
+CREATE INDEX idx_revert_bucket_id ON workflow_revert_status(bucket_id);
+CREATE INDEX idx_revert_status ON workflow_revert_status(status);
 
 
 -- =============================================================================
@@ -307,12 +318,16 @@ CREATE INDEX idx_revert_inst_id ON workflow_revert_status(workflow_instance_id);
 CREATE TABLE workflow_buckets (
     bucket_pk               VARCHAR2(36 CHAR) NOT NULL,
     bucket_id               VARCHAR2(100 CHAR) NOT NULL,
-    name                    VARCHAR2(255 CHAR) NOT NULL,
+    name                    VARCHAR2(200 CHAR) NOT NULL,
     description             VARCHAR2(1000 CHAR),
+    category                VARCHAR2(100 CHAR),
+    priority                VARCHAR2(20 CHAR) NOT NULL, -- CRITICAL, HIGH, MEDIUM, LOW
     sla_hours               NUMBER(10,0),
-    owner_group             VARCHAR2(100 CHAR),
+    owner_group             VARCHAR2(200 CHAR),
+    auto_actions            VARCHAR2(500 CHAR),
     active                  NUMBER(1,0) DEFAULT 1 NOT NULL,
     circle_id               NUMBER(10,0),
+    possible_outcomes       VARCHAR2(2000 CHAR),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_bucket PRIMARY KEY (bucket_pk),
@@ -321,29 +336,39 @@ CREATE TABLE workflow_buckets (
 );
 
 CREATE UNIQUE INDEX idx_bucket_id ON workflow_buckets(bucket_id);
+CREATE INDEX idx_bucket_priority ON workflow_buckets(priority);
+CREATE INDEX idx_bucket_active ON workflow_buckets(active);
 
 
 -- 10. WORKFLOW BUCKET EXECUTIONS TABLE
 CREATE TABLE workflow_bucket_executions (
     bucket_execution_pk     VARCHAR2(36 CHAR) NOT NULL,
+    execution_log_id        VARCHAR2(36 CHAR) NOT NULL,
+    instance_id             VARCHAR2(36 CHAR),
+    workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     bucket_id               VARCHAR2(100 CHAR) NOT NULL,
-    workflow_instance_id    VARCHAR2(36 CHAR),
-    business_key            VARCHAR2(100 CHAR),
-    status                  VARCHAR2(30 CHAR) NOT NULL,
-    outcome                 VARCHAR2(100 CHAR),
-    assigned_to             VARCHAR2(100 CHAR),
+    bucket_name             VARCHAR2(200 CHAR) NOT NULL,
+    status                  VARCHAR2(20 CHAR) NOT NULL, -- PENDING, IN_REVIEW, RESOLVED
+    priority                VARCHAR2(20 CHAR), -- CRITICAL, HIGH, MEDIUM, LOW
     circle_id               NUMBER(10,0),
-    input_context           CLOB,
-    output_context          CLOB,
+    sla_hours               NUMBER(10,0),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_bucket_exec PRIMARY KEY (bucket_execution_pk)
+    resolved_at             TIMESTAMP(6),
+    resolved_by             VARCHAR2(200 CHAR),
+    resolution_notes        VARCHAR2(2000 CHAR),
+    CONSTRAINT pk_bucket_exec PRIMARY KEY (bucket_execution_pk),
+    CONSTRAINT fk_bex_exec_log FOREIGN KEY (execution_log_id)
+        REFERENCES workflow_execution_logs(execution_log_pk) ON DELETE CASCADE,
+    CONSTRAINT fk_bex_instance FOREIGN KEY (instance_id)
+        REFERENCES workflow_instances(workflow_instance_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_bexec_bucket_id ON workflow_bucket_executions(bucket_id);
-CREATE INDEX idx_bexec_inst_id ON workflow_bucket_executions(workflow_instance_id);
-CREATE INDEX idx_bexec_bkey ON workflow_bucket_executions(business_key);
-CREATE INDEX idx_bexec_status ON workflow_bucket_executions(status);
+CREATE INDEX idx_bex_bucket_id ON workflow_bucket_executions(bucket_id);
+CREATE INDEX idx_bex_status ON workflow_bucket_executions(status);
+CREATE INDEX idx_bex_workflow_key ON workflow_bucket_executions(workflow_key);
+CREATE INDEX idx_bex_exec_log_id ON workflow_bucket_executions(execution_log_id);
+CREATE INDEX idx_bex_created_at ON workflow_bucket_executions(created_at);
+CREATE INDEX idx_bex_instance_id ON workflow_bucket_executions(instance_id);
 
 
 -- =============================================================================
@@ -353,109 +378,125 @@ CREATE INDEX idx_bexec_status ON workflow_bucket_executions(status);
 -- 11. WORKFLOW RULES TABLE
 CREATE TABLE workflow_rules (
     rule_pk                 VARCHAR2(36 CHAR) NOT NULL,
-    rule_id                 VARCHAR2(100 CHAR) NOT NULL,
-    name                    VARCHAR2(255 CHAR) NOT NULL,
+    rule_key                VARCHAR2(100 CHAR) NOT NULL,
+    name                    VARCHAR2(200 CHAR) NOT NULL,
     description             VARCHAR2(1000 CHAR),
-    expression              CLOB NOT NULL,
+    expression              VARCHAR2(2000 CHAR) NOT NULL,
     active                  NUMBER(1,0) DEFAULT 1 NOT NULL,
     circle_id               NUMBER(10,0),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_rule PRIMARY KEY (rule_pk),
-    CONSTRAINT uq_rule_id UNIQUE (rule_id),
+    CONSTRAINT uq_rule_key UNIQUE (rule_key),
     CONSTRAINT chk_rule_active CHECK (active IN (0, 1))
 );
 
-CREATE UNIQUE INDEX idx_rule_id ON workflow_rules(rule_id);
+CREATE UNIQUE INDEX idx_rule_key ON workflow_rules(rule_key);
+CREATE INDEX idx_rule_active ON workflow_rules(active);
 
 
 -- 12. WORKFLOW CONTEXT SCHEMAS TABLE
 CREATE TABLE workflow_context_schemas (
     context_schema_pk       VARCHAR2(36 CHAR) NOT NULL,
-    name                    VARCHAR2(255 CHAR) NOT NULL,
-    schema_key              VARCHAR2(100 CHAR) NOT NULL,
+    workflow_key            VARCHAR2(100 CHAR) NOT NULL,
+    name                    VARCHAR2(200 CHAR) NOT NULL,
     description             VARCHAR2(1000 CHAR),
     circle_id               NUMBER(10,0),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_ctx_schema PRIMARY KEY (context_schema_pk),
-    CONSTRAINT uq_ctx_schema_key UNIQUE (schema_key)
+    CONSTRAINT uq_ctx_workflow_key UNIQUE (workflow_key)
 );
 
-CREATE UNIQUE INDEX idx_ctx_schema_key ON workflow_context_schemas(schema_key);
+CREATE UNIQUE INDEX idx_ctx_schema_key ON workflow_context_schemas(workflow_key);
 
 
--- 13. WORKFLOW CONTEXT FIELDS TABLE
-CREATE TABLE workflow_context_fields (
-    context_field_pk        VARCHAR2(36 CHAR) NOT NULL,
-    schema_id               VARCHAR2(36 CHAR) NOT NULL,
-    field_key               VARCHAR2(100 CHAR) NOT NULL,
-    display_name            VARCHAR2(255 CHAR) NOT NULL,
-    data_type               VARCHAR2(50 CHAR) NOT NULL,
-    provider_type           VARCHAR2(50 CHAR),
-    provider_config         CLOB,
-    circle_id               NUMBER(10,0),
-    CONSTRAINT pk_ctx_field PRIMARY KEY (context_field_pk),
-    CONSTRAINT fk_field_schema FOREIGN KEY (schema_id) 
-        REFERENCES workflow_context_schemas(context_schema_pk) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_ctx_field_schema ON workflow_context_fields(schema_id);
-CREATE INDEX idx_ctx_field_key ON workflow_context_fields(field_key);
-
-
--- 14. WORKFLOW EVENT DEFINITIONS TABLE
-CREATE TABLE workflow_event_definitions (
-    event_definition_pk     VARCHAR2(36 CHAR) NOT NULL,
-    event_key               VARCHAR2(100 CHAR) NOT NULL,
-    name                    VARCHAR2(255 CHAR) NOT NULL,
-    description             VARCHAR2(1000 CHAR),
-    payload_schema          CLOB,
-    circle_id               NUMBER(10,0),
-    created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_event_def PRIMARY KEY (event_definition_pk),
-    CONSTRAINT uq_event_def_key UNIQUE (event_key)
-);
-
-CREATE UNIQUE INDEX idx_event_def_key ON workflow_event_definitions(event_key);
-
-
--- 15. WORKFLOW INTEGRATION REGISTRY TABLE
+-- 13. WORKFLOW INTEGRATION REGISTRY TABLE
 CREATE TABLE workflow_integration_registry (
     integration_pk          VARCHAR2(36 CHAR) NOT NULL,
     integration_key         VARCHAR2(100 CHAR) NOT NULL,
-    name                    VARCHAR2(255 CHAR) NOT NULL,
-    type                    VARCHAR2(50 CHAR) NOT NULL, -- REST, SOAP, DB, MQ
-    config_json             CLOB NOT NULL,
+    name                    VARCHAR2(200 CHAR) NOT NULL,
+    provider_type           VARCHAR2(20 CHAR) NOT NULL, -- REST, DB, CONFIG
+    endpoint_url            VARCHAR2(500 CHAR),
+    method                  VARCHAR2(10 CHAR), -- GET, POST
+    headers_json            VARCHAR2(2000 CHAR),
+    request_template        VARCHAR2(2000 CHAR),
+    timeout_ms              NUMBER(10,0) DEFAULT 5000,
     circle_id               NUMBER(10,0),
-    active                  NUMBER(1,0) DEFAULT 1 NOT NULL,
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_integration PRIMARY KEY (integration_pk),
-    CONSTRAINT uq_integration_key UNIQUE (integration_key),
-    CONSTRAINT chk_integration_active CHECK (active IN (0, 1))
+    CONSTRAINT uq_integration_key UNIQUE (integration_key)
 );
 
 CREATE UNIQUE INDEX idx_integration_key ON workflow_integration_registry(integration_key);
 
 
--- 16. WORKFLOW CUSTOMER FORMS TABLE (SAMPLE / CAF DOMAIN)
-CREATE TABLE workflow_customer_forms (
-    caf_id                  VARCHAR2(100 CHAR) NOT NULL,
-    msisdn                  VARCHAR2(50 CHAR),
-    customer_type           VARCHAR2(50 CHAR),
-    kyc_type                VARCHAR2(50 CHAR),
-    status                  VARCHAR2(50 CHAR),
-    form_data               CLOB,
+-- 14. WORKFLOW CONTEXT FIELDS TABLE
+CREATE TABLE workflow_context_fields (
+    context_field_pk        VARCHAR2(36 CHAR) NOT NULL,
+    schema_id               VARCHAR2(36 CHAR) NOT NULL,
+    field_key               VARCHAR2(100 CHAR) NOT NULL,
+    display_name            VARCHAR2(200 CHAR),
+    field_type              VARCHAR2(20 CHAR) NOT NULL, -- STRING, NUMBER, BOOLEAN, DATE
+    required                NUMBER(1,0) DEFAULT 0 NOT NULL,
+    default_value           VARCHAR2(500 CHAR),
+    description             VARCHAR2(500 CHAR),
+    field_order             NUMBER(10,0) NOT NULL,
+    integration_id          VARCHAR2(36 CHAR),
+    response_mapping        VARCHAR2(250 CHAR),
+    cacheable               NUMBER(1,0) DEFAULT 1 NOT NULL,
+    ttl_seconds             NUMBER(10,0) DEFAULT 300,
+    cost                    VARCHAR2(20 CHAR) DEFAULT 'LOW' NOT NULL,
+    expression              VARCHAR2(1000 CHAR),
+    circle_id               NUMBER(10,0),
+    CONSTRAINT pk_ctx_field PRIMARY KEY (context_field_pk),
+    CONSTRAINT fk_field_schema FOREIGN KEY (schema_id) 
+        REFERENCES workflow_context_schemas(context_schema_pk) ON DELETE CASCADE,
+    CONSTRAINT fk_ctx_field_integration FOREIGN KEY (integration_id)
+        REFERENCES workflow_integration_registry(integration_pk) ON DELETE SET NULL,
+    CONSTRAINT chk_field_required CHECK (required IN (0, 1)),
+    CONSTRAINT chk_field_cacheable CHECK (cacheable IN (0, 1))
+);
+
+CREATE INDEX idx_ctx_field_schema ON workflow_context_fields(schema_id);
+CREATE INDEX idx_ctx_field_key ON workflow_context_fields(field_key);
+CREATE INDEX idx_ctx_field_integration ON workflow_context_fields(integration_id);
+
+
+-- 15. WORKFLOW EVENT DEFINITIONS TABLE
+CREATE TABLE workflow_event_definitions (
+    event_definition_pk     VARCHAR2(36 CHAR) NOT NULL,
+    event_key               VARCHAR2(100 CHAR) NOT NULL,
+    name                    VARCHAR2(200 CHAR) NOT NULL,
+    description             VARCHAR2(1000 CHAR),
+    kafka_topic             VARCHAR2(250 CHAR),
+    correlation_key_path    VARCHAR2(250 CHAR),
+    payload_schema          VARCHAR2(4000 CHAR),
+    active                  NUMBER(1,0) DEFAULT 1 NOT NULL,
     circle_id               NUMBER(10,0),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_customer_form PRIMARY KEY (caf_id)
+    CONSTRAINT pk_event_def PRIMARY KEY (event_definition_pk),
+    CONSTRAINT uq_event_def_key UNIQUE (event_key),
+    CONSTRAINT chk_event_active CHECK (active IN (0, 1))
 );
 
-CREATE INDEX idx_caf_msisdn ON workflow_customer_forms(msisdn);
-CREATE INDEX idx_caf_status ON workflow_customer_forms(status);
+CREATE UNIQUE INDEX idx_event_def_key ON workflow_event_definitions(event_key);
+CREATE INDEX idx_event_def_active ON workflow_event_definitions(active);
+
+
+-- 16. WORKFLOW CUSTOMER FORMS TABLE (SAMPLE / CAF DOMAIN)
+CREATE TABLE workflow_customer_forms (
+    customer_form_pk        VARCHAR2(36 CHAR) NOT NULL,
+    customer_name           VARCHAR2(255 CHAR),
+    form_status             VARCHAR2(100 CHAR),
+    circle_id               NUMBER(10,0),
+    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_customer_form PRIMARY KEY (customer_form_pk)
+);
+
+CREATE INDEX idx_form_status ON workflow_customer_forms(form_status);
 
 
 -- 17. WORKFLOW STAGED PAYLOADS TABLE (PRE-SUBMISSION / OUT-OF-ORDER STAGING)
@@ -473,6 +514,7 @@ CREATE TABLE workflow_staged_payloads (
 
 CREATE INDEX idx_staged_biz_key ON workflow_staged_payloads(business_key);
 CREATE INDEX idx_staged_type ON workflow_staged_payloads(payload_type);
+CREATE INDEX idx_staged_status ON workflow_staged_payloads(status);
 
 COMMIT;
 -- =============================================================================

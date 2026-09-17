@@ -4,7 +4,7 @@
 -- Target Database: Oracle Database 12c / 18c / 19c / 21c / 23c (Compatible with DBeaver)
 -- Description: Automated verification script to validate table setup,
 --              Primary Keys, Foreign Key relationships, orphan records,
---              and missing FK indexes.
+--              and missing FK indexes across all 17 workflow tables.
 -- =============================================================================
 
 -- =============================================================================
@@ -109,10 +109,31 @@ WHERE l.execution_log_pk IS NULL
 
 UNION ALL
 
+SELECT 'workflow_bucket_executions without parent execution_log', COUNT(*)
+FROM workflow_bucket_executions be
+LEFT JOIN workflow_execution_logs l ON be.execution_log_id = l.execution_log_pk
+WHERE l.execution_log_pk IS NULL
+
+UNION ALL
+
+SELECT 'workflow_bucket_executions without workflow_instance', COUNT(*)
+FROM workflow_bucket_executions be
+LEFT JOIN workflow_instances i ON be.instance_id = i.workflow_instance_pk
+WHERE be.instance_id IS NOT NULL AND i.workflow_instance_pk IS NULL
+
+UNION ALL
+
 SELECT 'workflow_context_fields without context_schema', COUNT(*)
 FROM workflow_context_fields f
 LEFT JOIN workflow_context_schemas s ON f.schema_id = s.context_schema_pk
-WHERE s.context_schema_pk IS NULL;
+WHERE s.context_schema_pk IS NULL
+
+UNION ALL
+
+SELECT 'workflow_context_fields without integration_registry', COUNT(*)
+FROM workflow_context_fields f
+LEFT JOIN workflow_integration_registry r ON f.integration_id = r.integration_pk
+WHERE f.integration_id IS NOT NULL AND r.integration_pk IS NULL;
 
 
 -- =============================================================================
