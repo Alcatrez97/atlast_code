@@ -107,6 +107,12 @@ END;
 /
 
 BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE POSTPAID_ONBOARD_CAF CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE workflow_customer_forms CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
@@ -486,17 +492,17 @@ CREATE UNIQUE INDEX idx_event_def_key ON workflow_event_definitions(event_key);
 CREATE INDEX idx_event_def_active ON workflow_event_definitions(active);
 
 
--- 16. WORKFLOW CUSTOMER FORMS TABLE (SAMPLE / CAF DOMAIN)
-CREATE TABLE workflow_customer_forms (
-    customer_form_pk        VARCHAR2(36 CHAR) NOT NULL,
+-- 16. POSTPAID ONBOARD CAF TABLE (CUSTOMER / CAF DOMAIN)
+CREATE TABLE POSTPAID_ONBOARD_CAF (
+    caf_id                  VARCHAR2(100 CHAR) NOT NULL,
     customer_name           VARCHAR2(255 CHAR),
     form_status             VARCHAR2(100 CHAR),
     circle_id               NUMBER(10,0),
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_customer_form PRIMARY KEY (customer_form_pk)
+    CONSTRAINT pk_postpaid_onboard_caf PRIMARY KEY (caf_id)
 );
 
-CREATE INDEX idx_form_status ON workflow_customer_forms(form_status);
+CREATE INDEX idx_poc_form_status ON POSTPAID_ONBOARD_CAF(form_status);
 
 
 -- 17. WORKFLOW STAGED PAYLOADS TABLE (PRE-SUBMISSION / OUT-OF-ORDER STAGING)

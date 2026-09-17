@@ -4,12 +4,12 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "workflow_customer_forms")
+@Table(name = "POSTPAID_ONBOARD_CAF")
 public class CustomerForm {
 
     @Id
-    @Column(name = "customer_form_pk", length = 36)
-    private String id; // UUID, matches engine's contextId
+    @Column(name = "caf_id", length = 100)
+    private String id; // UUID or tracking CAF ID, matches engine's contextId
 
     @Column(name = "customer_name", length = 255)
     private String customerName;

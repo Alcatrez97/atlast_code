@@ -9,7 +9,7 @@
 
 -- =============================================================================
 -- 1. TABLE INVENTORY & ROW COUNTS
--- Verifies all 17 engine tables exist in your schema
+-- Verifies all 17 engine tables exist in your schema (16 WORKFLOW_* + POSTPAID_ONBOARD_CAF)
 -- =============================================================================
 SELECT 
     t.table_name,
@@ -17,7 +17,8 @@ SELECT
     t.status,
     t.last_analyzed
 FROM user_tables t
-WHERE t.table_name LIKE 'WORKFLOW_%'
+WHERE t.table_name LIKE 'WORKFLOW_%' 
+   OR t.table_name = 'POSTPAID_ONBOARD_CAF'
 ORDER BY t.table_name;
 
 
@@ -42,7 +43,7 @@ JOIN user_cons_columns col_r
     ON c_pk.constraint_name = col_r.constraint_name 
     AND col_a.position = col_r.position
 WHERE a.constraint_type = 'R'
-  AND a.table_name LIKE 'WORKFLOW_%'
+  AND (a.table_name LIKE 'WORKFLOW_%' OR a.table_name = 'POSTPAID_ONBOARD_CAF')
 ORDER BY a.table_name, a.constraint_name;
 
 
@@ -59,7 +60,7 @@ FROM user_constraints c
 JOIN user_cons_columns cc 
     ON c.constraint_name = cc.constraint_name
 WHERE c.constraint_type = 'P'
-  AND c.table_name LIKE 'WORKFLOW_%'
+  AND (c.table_name LIKE 'WORKFLOW_%' OR c.table_name = 'POSTPAID_ONBOARD_CAF')
 ORDER BY c.table_name;
 
 
@@ -133,7 +134,14 @@ UNION ALL
 SELECT 'workflow_context_fields without integration_registry', COUNT(*)
 FROM workflow_context_fields f
 LEFT JOIN workflow_integration_registry r ON f.integration_id = r.integration_pk
-WHERE f.integration_id IS NOT NULL AND r.integration_pk IS NULL;
+WHERE f.integration_id IS NOT NULL AND r.integration_pk IS NULL
+
+UNION ALL
+
+SELECT 'workflow_revert_status without POSTPAID_ONBOARD_CAF', COUNT(*)
+FROM workflow_revert_status r
+LEFT JOIN POSTPAID_ONBOARD_CAF c ON r.form_id = c.caf_id
+WHERE r.form_id IS NOT NULL AND c.caf_id IS NULL;
 
 
 -- =============================================================================
@@ -148,7 +156,7 @@ FROM user_constraints c
 JOIN user_cons_columns cc 
     ON c.constraint_name = cc.constraint_name
 WHERE c.constraint_type = 'R'
-  AND c.table_name LIKE 'WORKFLOW_%'
+  AND (c.table_name LIKE 'WORKFLOW_%' OR c.table_name = 'POSTPAID_ONBOARD_CAF')
   AND NOT EXISTS (
       SELECT 1 
       FROM user_ind_columns ic

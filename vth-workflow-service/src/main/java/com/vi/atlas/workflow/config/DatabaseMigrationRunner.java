@@ -32,12 +32,20 @@ public class DatabaseMigrationRunner {
                 log.debug("Could not disable referential integrity: {}", e.getMessage());
             }
 
+            // Rename workflow_customer_forms table to POSTPAID_ONBOARD_CAF if it exists
+            if (tableExists(stmt, "workflow_customer_forms") && !tableExists(stmt, "POSTPAID_ONBOARD_CAF")) {
+                log.info("Renaming table workflow_customer_forms to POSTPAID_ONBOARD_CAF...");
+                stmt.execute("ALTER TABLE workflow_customer_forms RENAME TO POSTPAID_ONBOARD_CAF");
+                log.info("Successfully renamed table workflow_customer_forms to POSTPAID_ONBOARD_CAF.");
+            }
+
             // 1. Rename primary key 'id' columns if they exist
             renameColumnIfExist(stmt, "workflow_buckets", "id", "bucket_pk");
             renameColumnIfExist(stmt, "workflow_bucket_executions", "id", "bucket_execution_pk");
             renameColumnIfExist(stmt, "workflow_context_fields", "id", "context_field_pk");
             renameColumnIfExist(stmt, "workflow_context_schemas", "id", "context_schema_pk");
-            renameColumnIfExist(stmt, "workflow_customer_forms", "id", "customer_form_pk");
+            renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "id", "caf_id");
+            renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "customer_form_pk", "caf_id");
             renameColumnIfExist(stmt, "workflow_execution_logs", "id", "execution_log_pk");
             renameColumnIfExist(stmt, "workflow_integration_registry", "id", "integration_pk");
             renameColumnIfExist(stmt, "workflow_revert_status", "id", "revert_status_pk");
@@ -103,6 +111,7 @@ public class DatabaseMigrationRunner {
         autoCleanOrphans(stmt, "workflow_execution_logs", "version_id", "workflow_versions", "workflow_version_pk");
         autoCleanOrphans(stmt, "workflow_execution_logs", "instance_id", "workflow_instances", "workflow_instance_pk");
         autoCleanOrphans(stmt, "workflow_revert_status", "workflow_instance_id", "workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "workflow_revert_status", "form_id", "POSTPAID_ONBOARD_CAF", "caf_id");
         autoCleanOrphans(stmt, "workflow_revert_status", "form_id", "workflow_customer_forms", "customer_form_pk");
 
         // Clean context_fields integration_id
