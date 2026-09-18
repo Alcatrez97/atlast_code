@@ -178,6 +178,18 @@ public class ExecutionService {
             businessKey = (String) context.get("cafId");
         }
         if (businessKey == null || businessKey.isBlank()) {
+            Object txnId = context.get("transactionId");
+            if (txnId != null) businessKey = String.valueOf(txnId);
+        }
+        if (businessKey == null || businessKey.isBlank()) {
+            Object orderId = context.get("orderId");
+            if (orderId != null) businessKey = String.valueOf(orderId);
+        }
+        if (businessKey == null || businessKey.isBlank()) {
+            Object trackingId = context.get("trackingId");
+            if (trackingId != null) businessKey = String.valueOf(trackingId);
+        }
+        if (businessKey == null || businessKey.isBlank()) {
             businessKey = "BK-" + instanceId.substring(0, 8);
         }
         instance.setBusinessKey(businessKey);

@@ -111,8 +111,9 @@ public class KafkaConfig {
         config.put(ConsumerConfig.GROUP_ID_CONFIG, "atlas-workflow-group");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>();
+        JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(Object.class);
         jsonDeserializer.addTrustedPackages("*");
+        jsonDeserializer.ignoreTypeHeaders();
 
         return new DefaultKafkaConsumerFactory<>(
                 config,

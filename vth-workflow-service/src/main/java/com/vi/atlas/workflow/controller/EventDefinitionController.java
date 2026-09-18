@@ -23,6 +23,9 @@ public class EventDefinitionController {
     @Autowired
     private EventDefinitionRepository eventDefinitionRepository;
 
+    @Autowired(required = false)
+    private com.vi.atlas.workflow.service.DynamicKafkaConsumerService dynamicKafkaConsumerService;
+
     @GetMapping
     @Operation(summary = "Get all event definitions")
     public ResponseEntity<List<EventDefinitionDto>> getAll() {
@@ -63,6 +66,11 @@ public class EventDefinitionController {
         def.setCircleId(dto.getCircleId());
 
         def = eventDefinitionRepository.save(def);
+
+        if (dynamicKafkaConsumerService != null) {
+            dynamicKafkaConsumerService.refreshTopics();
+        }
+
         return new ResponseEntity<>(toDto(def), HttpStatus.CREATED);
     }
 
@@ -85,6 +93,11 @@ public class EventDefinitionController {
         def.setCircleId(dto.getCircleId());
 
         def = eventDefinitionRepository.save(def);
+
+        if (dynamicKafkaConsumerService != null) {
+            dynamicKafkaConsumerService.refreshTopics();
+        }
+
         return ResponseEntity.ok(toDto(def));
     }
 
@@ -92,6 +105,11 @@ public class EventDefinitionController {
     @Operation(summary = "Delete event definition")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         eventDefinitionRepository.deleteById(id);
+
+        if (dynamicKafkaConsumerService != null) {
+            dynamicKafkaConsumerService.refreshTopics();
+        }
+
         return ResponseEntity.noContent().build();
     }
 
