@@ -204,13 +204,14 @@ public class KafkaIntegrationTest {
 
         // 1. Submit CAF to Kafka topic 'caf-lifecycle'
         CafSubmittedEvent submitEvent = new CafSubmittedEvent(cafId, workflowKey, new HashMap<>());
-        kafkaTemplate.send("caf-lifecycle", cafId, submitEvent);
+        kafkaTemplate.send("caf-lifecycle", cafId, submitEvent).get(10, java.util.concurrent.TimeUnit.SECONDS);
+        kafkaTemplate.flush();
 
         // 2. The engine should consume CafSubmittedEvent and start the workflow.
         // It will progress through START and then pause at BUCKET (A2).
         // Let's poll the database to find the running instance.
         WorkflowInstance instance = null;
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < 80; i++) {
             List<WorkflowInstance> instances = instanceRepository.findByWorkflowKeyOrderByCreatedAtDesc(workflowKey);
             if (!instances.isEmpty()) {
                 instance = instances.get(0);
@@ -218,7 +219,7 @@ public class KafkaIntegrationTest {
                     break;
                 }
             }
-            Thread.sleep(100);
+            Thread.sleep(150);
         }
 
         assertNotNull(instance, "Workflow instance should have been started");
@@ -226,7 +227,7 @@ public class KafkaIntegrationTest {
         assertEquals("bucket-a2", instance.getCurrentNodeId());
 
         // Also assert that CustomerForm is updated to A2 Pending
-        Optional<CustomerForm> formOpt = customerFormRepository.findById(cafId);
+        Optional<CustomerForm> formOpt = customerFormRepository.findById(CustomerForm.parseCafId(cafId));
         assertTrue(formOpt.isPresent());
         assertEquals("A2 Pending", formOpt.get().getFormStatus());
 

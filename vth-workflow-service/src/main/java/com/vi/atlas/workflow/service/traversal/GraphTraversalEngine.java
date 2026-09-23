@@ -120,7 +120,7 @@ public class GraphTraversalEngine {
         // Resolve contextId for CustomerForm tracking
         String contextId = context instanceof LazyContextMap
                 ? ((LazyContextMap) context).getContextId()
-                : (String) context.get("contextId");
+                : java.util.Objects.toString(context.get("contextId"), null);
 
         log.info("Engine starting/resuming traversal for workflowKey={}, versionNumber={}, " +
                  "instanceId={}, startNodeId={}, contextId={}",

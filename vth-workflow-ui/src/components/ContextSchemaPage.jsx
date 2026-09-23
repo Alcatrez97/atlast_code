@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Container, Grid, Paper, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Switch, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Card, CardContent, CircularProgress, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Tooltip, FormControlLabel, Chip } from '@mui/material';
+import { Box, Container, Grid, Paper, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Switch, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Card, CardContent, CircularProgress, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Tooltip, FormControlLabel, Chip, Autocomplete } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
@@ -11,6 +11,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent';
 import InputIcon from '@mui/icons-material/Input';
 import { useWorkflowStore } from '../store/workflowStore.js';
+import { STANDARD_CONVENTIONS } from './CreateWorkflowDialog';
 export const ContextSchemaPage = ({ onShowNotification }) => {
   const { workflows, goBack, showConfirm } = useWorkflowStore();
   const [schemas, setSchemas] = useState([]);
@@ -22,6 +23,13 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
   const [schemaDesc, setSchemaDesc] = useState('');
   const [fields, setFields] = useState([]);
   const [schemaId, setSchemaId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [contextIdField, setContextIdField] = useState('');
+  const [targetTable, setTargetTable] = useState('');
+  const [targetPkColumn, setTargetPkColumn] = useState('');
+  const [targetStatusColumn, setTargetStatusColumn] = useState('');
+  const [customOverrideOpen, setCustomOverrideOpen] = useState(false);
+  const matchedConvention = STANDARD_CONVENTIONS.find(c => selectedKey.toUpperCase().startsWith(c.prefix));
   // Resolution Dialog States
   const [resolutionDialogOpen, setResolutionDialogOpen] = useState(false);
   const [selectedFieldIndex, setSelectedFieldIndex] = useState(null);
@@ -79,6 +87,11 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
       setSchemaId(existing.id);
       setSchemaName(existing.name);
       setSchemaDesc(existing.description || '');
+      setContextIdField(existing.contextIdField || '');
+      setTargetTable(existing.targetTable || '');
+      setTargetPkColumn(existing.targetPkColumn || '');
+      setTargetStatusColumn(existing.targetStatusColumn || '');
+      setCustomOverrideOpen(Boolean(existing.targetTable));
       setFields(existing.fields || []);
     }
     else {
@@ -86,6 +99,11 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
       const wf = workflows.find(w => w.key === selectedKey);
       setSchemaName(wf ? `${wf.name} Schema` : '');
       setSchemaDesc('');
+      setContextIdField('');
+      setTargetTable('');
+      setTargetPkColumn('');
+      setTargetStatusColumn('');
+      setCustomOverrideOpen(false);
       setFields([]);
     }
   }, [selectedKey, schemas, workflows]);
@@ -194,6 +212,10 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
         workflowKey: selectedKey,
         name: schemaName,
         description: schemaDesc,
+        contextIdField: contextIdField || undefined,
+        targetTable: customOverrideOpen && targetTable.trim() ? targetTable.trim() : undefined,
+        targetPkColumn: customOverrideOpen && targetPkColumn.trim() ? targetPkColumn.trim() : undefined,
+        targetStatusColumn: customOverrideOpen && targetStatusColumn.trim() ? targetStatusColumn.trim() : undefined,
         fields: fields.map((f, idx) => ({ ...f, fieldOrder: idx }))
       };
       const res = await fetch('/api/context-schemas', {
@@ -269,40 +291,103 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
             <CardContent>
-              <FormControl fullWidth size="small" variant="outlined" sx={{ mb: 2 }}>
-                <InputLabel id="workflow-select-label" sx={{ color: 'text.secondary' }}>Select Workflow</InputLabel>
-                <Select labelId="workflow-select-label" value={selectedKey} label="Select Workflow" onChange={(e) => setSelectedKey(e.target.value)} sx={{ color: 'text.primary', '.MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}>
-                  {workflows.map((wf) => (<MenuItem key={wf.key} value={wf.key}>
-                    {wf.name}
-                  </MenuItem>))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                size="small"
+                options={workflows}
+                getOptionLabel={(wf) => {
+                  if (typeof wf === 'string') {
+                    const match = workflows.find(w => w.key === wf);
+                    return match ? `${match.name} (${match.key})` : wf;
+                  }
+                  return `${wf.name} (${wf.key})`;
+                }}
+                value={workflows.find(wf => wf.key === selectedKey) || null}
+                onChange={(_, newValue) => {
+                  if (newValue) {
+                    setSelectedKey(newValue.key);
+                  }
+                }}
+                filterOptions={(options, state) => {
+                  const query = (state.inputValue || '').trim().toLowerCase();
+                  if (!query) return options;
+                  return options.filter(wf =>
+                    (wf.name || '').toLowerCase().includes(query) ||
+                    (wf.key || '').toLowerCase().includes(query)
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Select Workflow (Type name to search)"
+                    placeholder="Type workflow name..."
+                    sx={{ mb: 2 }}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...optionProps } = props;
+                  return (
+                    <Box component="li" key={option.id || key} {...optionProps} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', py: 0.75 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {option.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                        {option.key}
+                      </Typography>
+                    </Box>
+                  );
+                }}
+              />
 
               <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
 
-              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', display: 'block', mb: 1.5 }}>
-                SCHEMA REGISTRY STATUS
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {workflows.map(wf => {
-                  const hasSchema = schemas.some(s => s.workflowKey === wf.key);
-                  return (<Box key={wf.key} sx={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    p: 1, borderRadius: 1, bgcolor: selectedKey === wf.key ? 'rgba(20,184,166,0.08)' : 'transparent',
-                    border: selectedKey === wf.key ? '1px solid rgba(20,184,166,0.3)' : '1px solid transparent'
-                  }}>
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: selectedKey === wf.key ? '#14b8a6' : 'text.primary' }}>
-                      {wf.name}
-                    </Typography>
-                    <span style={{
-                      fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '10px',
-                      background: hasSchema ? 'rgba(16,185,129,0.15)' : 'rgba(244,67,54,0.15)',
-                      color: hasSchema ? '#10b981' : '#f44336'
-                    }}>
-                      {hasSchema ? 'DEFINED' : 'NO SCHEMA'}
-                    </span>
-                  </Box>);
-                })}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary' }}>
+                  SCHEMA REGISTRY STATUS
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {workflows.filter(wf => schemas.some(s => s.workflowKey === wf.key)).length} / {workflows.length}
+                </Typography>
+              </Box>
+
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Filter list..."
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                sx={{ mb: 1.5, '.MuiInputBase-input': { fontSize: '12px', py: 0.75 } }}
+              />
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 320, overflowY: 'auto', pr: 0.5 }}>
+                {workflows
+                  .filter(wf => {
+                    if (!statusFilter.trim()) return true;
+                    const q = statusFilter.trim().toLowerCase();
+                    return (wf.name || '').toLowerCase().includes(q) || (wf.key || '').toLowerCase().includes(q);
+                  })
+                  .map(wf => {
+                    const hasSchema = schemas.some(s => s.workflowKey === wf.key);
+                    return (
+                      <Box key={wf.key} onClick={() => setSelectedKey(wf.key)} sx={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        p: 1, borderRadius: 1, cursor: 'pointer',
+                        bgcolor: selectedKey === wf.key ? 'rgba(20,184,166,0.08)' : 'transparent',
+                        border: selectedKey === wf.key ? '1px solid rgba(20,184,166,0.3)' : '1px solid transparent',
+                        '&:hover': { bgcolor: selectedKey === wf.key ? 'rgba(20,184,166,0.12)' : 'action.hover' }
+                      }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: selectedKey === wf.key ? '#14b8a6' : 'text.primary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                          {wf.name}
+                        </Typography>
+                        <span style={{
+                          fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '10px',
+                          background: hasSchema ? 'rgba(16,185,129,0.15)' : 'rgba(244,67,54,0.15)',
+                          color: hasSchema ? '#10b981' : '#f44336', flexShrink: 0
+                        }}>
+                          {hasSchema ? 'DEFINED' : 'NO SCHEMA'}
+                        </span>
+                      </Box>
+                    );
+                  })}
               </Box>
             </CardContent>
           </Card>
@@ -321,14 +406,132 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
                 Provide names, keys, data types, and default fallbacks. System will auto-validate these inputs before executing workflow key: <b>{selectedKey}</b>
               </Typography>
 
-              <Grid container spacing={2} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, sm: 6 }}>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField fullWidth size="small" label="Schema Name" value={schemaName} onChange={(e) => setSchemaName(e.target.value)} slotProps={{ input: { sx: { color: 'text.primary' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }} />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField fullWidth size="small" label="Description" value={schemaDesc} onChange={(e) => setSchemaDesc(e.target.value)} slotProps={{ input: { sx: { color: 'text.secondary' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }} />
                 </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="primary-context-id-label" sx={{ color: 'text.secondary' }}>Primary Identifier (Context ID / Form PK)</InputLabel>
+                    <Select
+                      labelId="primary-context-id-label"
+                      value={contextIdField}
+                      label="Primary Identifier (Context ID / Form PK)"
+                      onChange={(e) => setContextIdField(e.target.value)}
+                      sx={{ color: 'text.primary', '.MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}
+                    >
+                      <MenuItem value=""><em>-- None / Auto-generate UUID --</em></MenuItem>
+                      {fields.filter(f => f.fieldKey && f.fieldKey.trim() !== '').map((f) => (
+                        <MenuItem key={f.fieldKey} value={f.fieldKey}>
+                          🔑 {f.fieldKey} {f.displayName ? `(${f.displayName})` : ''}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2, fontStyle: 'italic' }}>
+                💡 <b>Primary Identifier:</b> When workflow enters BUCKET nodes or ingests external CAF events, the engine updates the database form table (e.g. <code>POSTPAID_ONBOARD_CAF</code>) using this context parameter as <code>caf_id</code>.
+              </Typography>
+
+              {/* Domain Entity Synchronization & Convention Card */}
+              <Box sx={{
+                p: 2,
+                mb: 3,
+                borderRadius: 2,
+                bgcolor: 'rgba(0, 0, 0, 0.02)',
+                border: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.5
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, fontSize: '12px' }}>
+                      DATABASE ENTITY SYNCHRONIZATION
+                    </Typography>
+                    {customOverrideOpen ? (
+                      <Chip label="Custom Table Override Active" size="small" color="secondary" sx={{ height: 20, fontSize: '10px', fontWeight: 700 }} />
+                    ) : matchedConvention ? (
+                      <Chip label={`Convention Matched: ${matchedConvention.domain}`} size="small" color="success" variant="outlined" sx={{ height: 20, fontSize: '10px', fontWeight: 700 }} />
+                    ) : (
+                      <Chip label="Fallback: POSTPAID_ONBOARD_CAF" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '10px', fontWeight: 700 }} />
+                    )}
+                  </Box>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={customOverrideOpen}
+                        onChange={(e) => setCustomOverrideOpen(e.target.checked)}
+                      />
+                    }
+                    label={<Typography sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary' }}>Override Default Target Table</Typography>}
+                    sx={{ m: 0 }}
+                  />
+                </Box>
+
+                {!customOverrideOpen ? (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '11px', lineHeight: 1.5 }}>
+                    {matchedConvention ? (
+                      <>
+                        Workflow key <code>{selectedKey}</code> starts with prefix <b>{matchedConvention.prefix}</b>.
+                        When workflows enter BUCKET stages, the engine will update table <code style={{ color: '#10b981', fontWeight: 700 }}>{matchedConvention.table}</code> on status column <code>{matchedConvention.statusCol}</code> using primary key <code>{matchedConvention.pk}</code>.
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ Workflow key <code>{selectedKey}</code> does not match any registered convention prefix (<code>CAF_</code>, <code>COCP_</code>).
+                        Bucket stages will fallback to updating table <b>POSTPAID_ONBOARD_CAF</b> (column: <code>form_status</code>). Enable "Override Default Target Table" above to specify a different table.
+                      </>
+                    )}
+                  </Typography>
+                ) : (
+                  <Box sx={{ pt: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Target Table Name"
+                          value={targetTable}
+                          onChange={(e) => setTargetTable(e.target.value.replace(/\s+/g, ''))}
+                          placeholder={matchedConvention ? matchedConvention.table : "e.g. ORDERS"}
+                          slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px' } } }}
+                          helperText="Database table where status is updated"
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Primary Key Column"
+                          value={targetPkColumn}
+                          onChange={(e) => setTargetPkColumn(e.target.value.replace(/\s+/g, ''))}
+                          placeholder={matchedConvention ? matchedConvention.pk : "e.g. order_id"}
+                          slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px' } } }}
+                          helperText="Column matching the contextId parameter"
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Status Column"
+                          value={targetStatusColumn}
+                          onChange={(e) => setTargetStatusColumn(e.target.value.replace(/\s+/g, ''))}
+                          placeholder={matchedConvention ? matchedConvention.statusCol : "e.g. order_status"}
+                          slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px' } } }}
+                          helperText="Column receiving bucket status strings"
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+              </Box>
 
               <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.06)' }} />
 
@@ -378,7 +581,12 @@ export const ContextSchemaPage = ({ onShowNotification }) => {
                         </TableCell>
                         {/* Field Key */}
                         <TableCell>
-                          <TextField variant="standard" size="small" placeholder="amount" value={field.fieldKey} onChange={(e) => handleFieldChange(idx, 'fieldKey', e.target.value.replace(/\s+/g, ''))} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px', color: 'text.primary' } } }} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField variant="standard" size="small" placeholder="amount" value={field.fieldKey} onChange={(e) => handleFieldChange(idx, 'fieldKey', e.target.value.replace(/\s+/g, ''))} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '12px', color: 'text.primary' } } }} />
+                            {contextIdField && field.fieldKey === contextIdField && (
+                              <Chip label="🔑 Primary ID" size="small" sx={{ fontSize: '9px', height: 18, bgcolor: 'rgba(20, 184, 166, 0.15)', color: '#0d9488', fontWeight: 700 }} />
+                            )}
+                          </Box>
                         </TableCell>
                         {/* Display Name */}
                         <TableCell>

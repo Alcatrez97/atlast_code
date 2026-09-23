@@ -2,8 +2,8 @@
 -- ATLAS WORKFLOW & DECISION ENGINE - ORACLE DATABASE DDL SCRIPT
 -- =============================================================================
 -- Target Database: Oracle Database 12c / 18c / 19c / 21c / 23c
--- Generated Date: 2026-09-18
--- Description: Complete production-ready DDL script with 'workflow_' prefix for all 17 tables,
+-- Generated Date: 2026-09-24
+-- Description: Complete production-ready DDL script with 'workflow_' prefix for all 18 tables,
 --              including DROP statements, TABLE definitions, PRIMARY KEYS, FOREIGN KEYS,
 --              UNIQUE CONSTRAINTS, CHECK CONSTRAINTS, and INDEXES.
 --              Fully synchronized with JPA Entities in com.vi.atlas.workflow.entity.*
@@ -108,6 +108,12 @@ END;
 
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE POSTPAID_ONBOARD_CAF CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE POSTPAID_ONBOARD_COCP CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -407,6 +413,10 @@ CREATE TABLE workflow_context_schemas (
     workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
     description             VARCHAR2(1000 CHAR),
+    context_id_field        VARCHAR2(100 CHAR),
+    target_table            VARCHAR2(100 CHAR),
+    target_pk_column        VARCHAR2(100 CHAR),
+    target_status_column    VARCHAR2(100 CHAR),
     circle_id               NUMBER(10,0),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
@@ -494,8 +504,7 @@ CREATE INDEX idx_event_def_active ON workflow_event_definitions(active);
 
 -- 16. POSTPAID ONBOARD CAF TABLE (CUSTOMER / CAF DOMAIN)
 CREATE TABLE POSTPAID_ONBOARD_CAF (
-    caf_id                  VARCHAR2(100 CHAR) NOT NULL,
-    customer_name           VARCHAR2(255 CHAR),
+    caf_id                  NUMBER(19,0) NOT NULL,
     form_status             VARCHAR2(100 CHAR),
     circle_id               NUMBER(10,0),
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
@@ -521,6 +530,19 @@ CREATE TABLE workflow_staged_payloads (
 CREATE INDEX idx_staged_biz_key ON workflow_staged_payloads(business_key);
 CREATE INDEX idx_staged_type ON workflow_staged_payloads(payload_type);
 CREATE INDEX idx_staged_status ON workflow_staged_payloads(status);
+
+
+-- 18. POSTPAID ONBOARD COCP TABLE (ENTERPRISE / COCP DOMAIN)
+CREATE TABLE POSTPAID_ONBOARD_COCP (
+    cocp_id                 VARCHAR2(100 CHAR) NOT NULL,
+    company_name            VARCHAR2(255 CHAR),
+    form_status             VARCHAR2(100 CHAR),
+    circle_id               NUMBER(10,0),
+    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_postpaid_onboard_cocp PRIMARY KEY (cocp_id)
+);
+
+CREATE INDEX idx_pocc_form_status ON POSTPAID_ONBOARD_COCP(form_status);
 
 COMMIT;
 -- =============================================================================

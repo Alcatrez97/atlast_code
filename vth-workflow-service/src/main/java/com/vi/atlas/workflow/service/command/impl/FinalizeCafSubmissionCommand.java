@@ -81,14 +81,6 @@ public class FinalizeCafSubmissionCommand implements WorkflowCommand {
                         false,
                         null,
                         "Optional circle ID override (defaults to staged CAF value)"
-                ),
-                new com.vi.atlas.workflow.dto.CommandParameterDto(
-                        "customerName",
-                        "Customer Name Override",
-                        "text",
-                        false,
-                        "",
-                        "Optional customer name override (defaults to staged CAF value)"
                 )
         );
     }
@@ -126,21 +118,13 @@ public class FinalizeCafSubmissionCommand implements WorkflowCommand {
             stagedDocsOpt = stagedPayloadRepository.findFirstByBusinessKeyAndPayloadTypeOrderByCreatedAtDesc(businessKey, "DOCUMENTS");
         }
 
-        // Extract customer details from staged CAF, or fallback to input/_context
-        String customerName = "Unknown";
+        // Extract details from staged CAF, or fallback to input/_context
         Integer circleId = 1;
         if (stagedCafOpt.isPresent() && stagedCafOpt.get().getPayload() != null) {
             Map<String, Object> cafData = stagedCafOpt.get().getPayload();
-            if (cafData.get("customerName") != null) {
-                customerName = cafData.get("customerName").toString();
-            }
             if (cafData.get("circleId") instanceof Number num) {
                 circleId = num.intValue();
             }
-        } else if (input.get("customerName") != null) {
-            customerName = input.get("customerName").toString();
-        } else if (input.get("_context") instanceof Map ctxMap && ctxMap.get("customerName") != null) {
-            customerName = ctxMap.get("customerName").toString();
         }
 
         if (input.get("circleId") instanceof Number num) {
@@ -153,17 +137,21 @@ public class FinalizeCafSubmissionCommand implements WorkflowCommand {
         }
 
         // Target form ID
-        final String formId = (businessKey != null && !businessKey.isBlank())
+        final String formIdStr = (businessKey != null && !businessKey.isBlank())
                 ? businessKey
-                : (input.get("_contextId") != null ? (String) input.get("_contextId") : java.util.UUID.randomUUID().toString());
+                : (input.get("_contextId") != null ? input.get("_contextId").toString() : null);
+        Long cafId = CustomerForm.parseCafId(formIdStr);
+        if (cafId == null) {
+            cafId = System.currentTimeMillis();
+        }
+        final Long finalCafId = cafId;
 
-        CustomerForm form = customerFormRepository.findById(formId).orElseGet(() -> {
+        CustomerForm form = customerFormRepository.findById(finalCafId).orElseGet(() -> {
             CustomerForm newForm = new CustomerForm();
-            newForm.setId(formId);
+            newForm.setId(finalCafId);
             return newForm;
         });
 
-        form.setCustomerName(customerName);
         form.setFormStatus(finalStatus);
         form.setCircleId(circleId);
         form.setUpdatedAt(LocalDateTime.now());

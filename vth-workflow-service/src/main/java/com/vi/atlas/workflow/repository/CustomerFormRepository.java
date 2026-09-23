@@ -9,14 +9,13 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface CustomerFormRepository extends JpaRepository<CustomerForm, String> {
+public interface CustomerFormRepository extends JpaRepository<CustomerForm, Long> {
 
     @Query("SELECT cf FROM CustomerForm cf WHERE " +
            "(:status IS NULL OR :status = '' OR LOWER(cf.formStatus) LIKE LOWER(CONCAT('%', :status, '%'))) AND " +
            "(:circleIds IS NULL OR cf.circleId IN :circleIds) AND " +
            "(:search IS NULL OR :search = '' OR " +
-           " LOWER(cf.id) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           " LOWER(cf.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           " CAST(cf.id as string) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            " LOWER(cf.formStatus) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<CustomerForm> findAllWithFilters(
             @Param("status") String status,

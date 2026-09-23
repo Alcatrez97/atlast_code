@@ -169,7 +169,7 @@ public class BucketApprovalIntegrationTest {
         assertEquals("bucket-a2", execution.getOutcomeNodeId());
 
         // Assert CustomerForm was updated to "A2 Pending"
-        Optional<CustomerForm> formOpt = customerFormRepository.findById(formId);
+        Optional<CustomerForm> formOpt = customerFormRepository.findById(CustomerForm.parseCafId(formId));
         assertTrue(formOpt.isPresent());
         assertEquals("A2 Pending", formOpt.get().getFormStatus());
 
@@ -221,7 +221,7 @@ public class BucketApprovalIntegrationTest {
         String instanceId = execution.getInstanceId();
 
         // Mock external system changing form status in the DB directly
-        CustomerForm form = customerFormRepository.findById(formId).orElseThrow();
+        CustomerForm form = customerFormRepository.findById(CustomerForm.parseCafId(formId)).orElseThrow();
         form.setFormStatus("A2Reject");
         customerFormRepository.saveAndFlush(form);
 

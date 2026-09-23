@@ -33,6 +33,11 @@ const CIRCLE_OPTIONS = [
   { id: 106, label: '106 - ROWB (West Bengal)', badge: 'WB', color: '#64748b' },
 ];
 
+export const STANDARD_CONVENTIONS = [
+  { prefix: 'CAF_', domain: 'Retail Postpaid (CAF)', table: 'POSTPAID_ONBOARD_CAF', statusCol: 'form_status', pk: 'caf_id' },
+  { prefix: 'COCP_', domain: 'Corporate Postpaid (COCP)', table: 'POSTPAID_ONBOARD_COCP', statusCol: 'form_status', pk: 'cocp_id' },
+];
+
 export const CreateWorkflowDialog = ({ open, onClose, onSubmit, initialData = null, mode = 'create' }) => {
     const [name, setName] = useState('');
     const [key, setKey] = useState('');
@@ -40,6 +45,8 @@ export const CreateWorkflowDialog = ({ open, onClose, onSubmit, initialData = nu
     const [scopeMode, setScopeMode] = useState('ALL'); // 'ALL' or 'SPECIFIC'
     const [selectedCircles, setSelectedCircles] = useState([]);
     const [errors, setErrors] = useState({});
+
+    const matchedConvention = STANDARD_CONVENTIONS.find(c => key.toUpperCase().startsWith(c.prefix));
 
     useEffect(() => {
         if (open) {
@@ -131,6 +138,75 @@ export const CreateWorkflowDialog = ({ open, onClose, onSubmit, initialData = nu
               variant="outlined"
               placeholder="e.g. ORDER_VALIDATION_PIPELINE"
             />
+
+            {/* Quick Domain Prefix Selectors */}
+            <Box sx={{ mt: -1, mb: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 0.5, fontSize: '11px' }}>
+                Naming Convention Prefix (Determines Target Table & Field):
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap' }}>
+                {STANDARD_CONVENTIONS.map(c => {
+                  const isSelected = key.toUpperCase().startsWith(c.prefix);
+                  return (
+                    <Chip
+                      key={c.prefix}
+                      label={c.prefix}
+                      size="small"
+                      clickable
+                      color={isSelected ? 'primary' : 'default'}
+                      variant={isSelected ? 'filled' : 'outlined'}
+                      onClick={() => {
+                        const stripped = key.replace(/^[A-Za-z0-9]+_/, '');
+                        setKey(`${c.prefix}${stripped || 'WORKFLOW'}`);
+                        if (errors.key) setErrors(prev => ({ ...prev, key: null }));
+                      }}
+                      sx={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', height: 22 }}
+                    />
+                  );
+                })}
+              </Box>
+            </Box>
+
+            {/* Live Domain Mapping & Warning Box */}
+            {key.trim() && (
+              <Box sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                bgcolor: matchedConvention ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                border: `1px solid ${matchedConvention ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5
+              }}>
+                <Typography variant="caption" sx={{
+                  fontWeight: 800,
+                  color: matchedConvention ? '#10b981' : '#d97706',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5
+                }}>
+                  {matchedConvention 
+                    ? `✅ Domain Convention Matched: [${matchedConvention.domain}]` 
+                    : '⚠️ Naming Convention Notice: Non-Standard Prefix'}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '11px', lineHeight: 1.4 }}>
+                  {matchedConvention ? (
+                    <>
+                      Workflows with prefix <code>{matchedConvention.prefix}</code> automatically synchronize bucket statuses to table{' '}
+                      <b style={{ color: '#10b981' }}>{matchedConvention.table}</b> on column{' '}
+                      <code>{matchedConvention.statusCol}</code> (PK: <code>{matchedConvention.pk}</code>).
+                    </>
+                  ) : (
+                    <>
+                      Key does not start with a recognized domain prefix (<code>CAF_</code>, <code>COCP_</code>).
+                      Bucket stages will default to updating <b>POSTPAID_ONBOARD_CAF</b> unless an explicit table override is defined in the Context Schema.
+                    </>
+                  )}
+                </Typography>
+              </Box>
+            )}
+
             <TextField
               label="Description"
               value={description}

@@ -181,11 +181,13 @@ public class CafJourneyIngestionService {
             status.put("workflowStatus", "NOT_STARTED");
         }
 
-        Optional<CustomerForm> formOpt = customerFormRepository.findById(trackingId);
+        Long cafId = CustomerForm.parseCafId(trackingId);
+        Optional<CustomerForm> formOpt = (cafId != null)
+                ? customerFormRepository.findById(cafId)
+                : Optional.empty();
         if (formOpt.isPresent()) {
             status.put("goldenRecordCreated", true);
             status.put("customerFormStatus", formOpt.get().getFormStatus());
-            status.put("customerName", formOpt.get().getCustomerName());
         } else {
             status.put("goldenRecordCreated", false);
         }

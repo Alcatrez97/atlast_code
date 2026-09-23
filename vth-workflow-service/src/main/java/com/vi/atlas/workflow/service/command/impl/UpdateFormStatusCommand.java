@@ -81,18 +81,20 @@ public class UpdateFormStatusCommand implements WorkflowCommand {
         String formId = (businessKey != null && !businessKey.isBlank()) ? businessKey : contextId;
 
         if (formId != null && !formId.isBlank()) {
-            final String targetId = formId;
-            CustomerForm form = customerFormRepository.findById(targetId).orElseGet(() -> {
-                CustomerForm newForm = new CustomerForm();
-                newForm.setId(targetId);
-                return newForm;
-            });
-            form.setFormStatus(formStatus);
-            if (input.get("customerName") != null) {
-                form.setCustomerName(input.get("customerName").toString());
+            Long cafId = CustomerForm.parseCafId(formId);
+            if (cafId != null) {
+                final Long targetId = cafId;
+                CustomerForm form = customerFormRepository.findById(targetId).orElseGet(() -> {
+                    CustomerForm newForm = new CustomerForm();
+                    newForm.setId(targetId);
+                    return newForm;
+                });
+                form.setFormStatus(formStatus);
+                customerFormRepository.save(form);
+                log.info("Updated CustomerForm status to '{}' for cafId={}", formStatus, targetId);
+            } else {
+                log.warn("Could not parse formId '{}' to Long for CustomerForm update", formId);
             }
-            customerFormRepository.save(form);
-            log.info("Updated CustomerForm status to '{}' for formId={}", formStatus, targetId);
         } else {
             log.warn("Missing contextId and businessKey, skipped updating CustomerForm status.");
         }

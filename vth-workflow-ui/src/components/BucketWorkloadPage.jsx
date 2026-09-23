@@ -379,8 +379,7 @@ export const BucketWorkloadPage = ({ onShowNotification }) => {
 
                     {pendingForm ? (<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
-                          This execution is suspended because it is waiting for manual approval of Customer Form:
-                          <strong> {pendingForm.customerName || 'N/A'}</strong> (ID: <code style={{ color: '#f59e0b', fontSize: '0.85rem' }}>{pendingForm.id}</code>).
+                          This execution is suspended because it is waiting for manual approval of Customer Form (ID: <code style={{ color: '#f59e0b', fontSize: '0.85rem' }}>{pendingForm.id}</code>).
                         </Typography>
                         <Typography variant="body2" sx={{ color: '#94a3b8' }}>
                           The form status is currently <span style={{ color: '#f59e0b', fontWeight: 700 }}>{pendingForm.formStatus}</span> in the simulator database.

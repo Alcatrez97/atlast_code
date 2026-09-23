@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, MenuItem, Select, FormControl, InputLabel, CircularProgress, Chip, Card, CardContent, Alert, IconButton, Switch, FormControlLabel } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Select, FormControl, InputLabel, CircularProgress, Chip, Card, CardContent, Alert, IconButton, Switch, FormControlLabel, Autocomplete } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -8,6 +8,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { useWorkflowStore } from '../store/workflowStore.js';
 import { ValidationResultBanner } from './ValidationResultBanner';
+import { STANDARD_CONVENTIONS } from './CreateWorkflowDialog';
 const STEP_STATUS_COLORS = {
   ENTERED: '#6366f1',
   EVALUATED: '#f59e0b',
@@ -152,10 +153,20 @@ export const ExecutionPanel = ({ onShowNotification }) => {
     setResult(null);
     setActiveStep(null);
     try {
+      const primaryId = (schema?.contextIdField && context[schema.contextIdField])
+        || context.contextId
+        || context.cafId
+        || context.businessKey
+        || undefined;
+
       const response = await fetch(`/api/execute/${selectedKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context }),
+        body: JSON.stringify({
+          context,
+          contextId: primaryId ? String(primaryId) : undefined,
+          businessKey: primaryId ? String(primaryId) : undefined
+        }),
       });
       const data = await response.json();
       setResult(data);
@@ -224,17 +235,50 @@ export const ExecutionPanel = ({ onShowNotification }) => {
 
         {publishedWorkflows.length === 0 ? (<Alert severity="info" sx={{ borderRadius: 2 }}>
           No workflows with a published version found. Publish a version to enable execution.
-        </Alert>) : (<FormControl fullWidth size="small">
-          <InputLabel>Select Workflow</InputLabel>
-          <Select value={selectedKey} label="Select Workflow" onChange={(e) => setSelectedKey(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
-            {publishedWorkflows.map(w => (<MenuItem key={w.id} value={w.key}>
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{w.name}</Typography>
-                <Typography variant="caption" color="text.secondary">{w.key} · v{w.activeVersion}</Typography>
-              </Box>
-            </MenuItem>))}
-          </Select>
-        </FormControl>)}
+        </Alert>) : (<Autocomplete
+            size="small"
+            options={publishedWorkflows}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') {
+                const found = publishedWorkflows.find(w => w.key === option);
+                return found ? `${found.name} (${found.key})` : option;
+              }
+              return `${option.name} (${option.key})`;
+            }}
+            value={publishedWorkflows.find(w => w.key === selectedKey) || null}
+            onChange={(_, newValue) => {
+              setSelectedKey(newValue ? newValue.key : '');
+            }}
+            filterOptions={(options, state) => {
+              const query = (state.inputValue || '').trim().toLowerCase();
+              if (!query) return options;
+              return options.filter(o =>
+                (o.name || '').toLowerCase().includes(query) ||
+                (o.key || '').toLowerCase().includes(query)
+              );
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select Workflow (Type name to search)"
+                placeholder="Type to search workflows..."
+                sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 1.5 }}
+              />
+            )}
+            renderOption={(props, option) => {
+              const { key, ...optionProps } = props;
+              return (
+                <Box component="li" key={option.id || key} {...optionProps} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', py: 0.75 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                    {option.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {option.key} · v{option.activeVersion}
+                  </Typography>
+                </Box>
+              );
+            }}
+          />)}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -296,46 +340,97 @@ export const ExecutionPanel = ({ onShowNotification }) => {
             <Box sx={{
               display: 'flex', flexDirection: 'column', gap: 2, p: 2,
               border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 4px 5px rgba(117, 113, 112, 0.4)', borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.21)'
-            }}>                {schema.fields.map((f) => (
-              <Box key={f.fieldKey}>
-                {f.fieldType === 'BOOLEAN' ? (
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formValues[f.fieldKey] === true}
-                        onChange={(e) => setFormValues({ ...formValues, [f.fieldKey]: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '12px' }}>
-                        {f.displayName} {f.required && <span style={{ color: '#9c989896' }}>*</span>}
+            }}>
+              {(() => {
+                const matchedConv = STANDARD_CONVENTIONS.find(c => selectedKey.toUpperCase().startsWith(c.prefix));
+                const targetTable = schema?.targetTable || matchedConv?.table || 'POSTPAID_ONBOARD_CAF';
+                const statusCol = schema?.targetStatusColumn || matchedConv?.statusCol || 'form_status';
+                const pkCol = schema?.targetPkColumn || matchedConv?.pk || 'caf_id';
+                return (
+                  <Box sx={{ p: 1.2, borderRadius: 1.5, bgcolor: 'rgba(20, 184, 166, 0.08)', border: '1px solid rgba(20, 184, 166, 0.25)', display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" sx={{ fontSize: '11px', color: '#0d9488', fontWeight: 700 }}>
+                        🎯 Target Entity Table: <b>{targetTable}</b> (field: <code>{statusCol}</code>, PK: <code>{pkCol}</code>)
                       </Typography>
-                    }
-                  />
-                ) : (
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label={`${f.displayName}${f.required ? ' *' : ''}`}
-                    type={f.fieldType === 'NUMBER' ? 'number' : 'text'}
-                    value={formValues[f.fieldKey] ?? ''}
-                    onChange={(e) => setFormValues({ ...formValues, [f.fieldKey]: e.target.value })}
-                    placeholder={f.defaultValue || ''}
-                    helperText={f.description}
-                    slotProps={{
-                      input: { sx: { color: '#000000ff', fontSize: '12px' } },
-                      formHelperText: { sx: { fontSize: '9px', color: 'text.secondary' } }
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(78, 76, 76, 0.38)' },
-                      '& .MuiInputLabel-root': { fontSize: '12px' },
-
-                    }}
-                  />
-                )}
-              </Box>
-            ))}
+                      {schema?.targetTable ? (
+                        <Chip label="Custom Table Override" size="small" color="secondary" sx={{ height: 18, fontSize: '9px', fontWeight: 700 }} />
+                      ) : matchedConv ? (
+                        <Chip label={`Convention: ${matchedConv.domain}`} size="small" color="success" variant="outlined" sx={{ height: 18, fontSize: '9px', fontWeight: 700 }} />
+                      ) : (
+                        <Chip label="Default Fallback" size="small" color="warning" variant="outlined" sx={{ height: 18, fontSize: '9px', fontWeight: 700 }} />
+                      )}
+                    </Box>
+                    {schema?.contextIdField ? (
+                      <Typography variant="caption" sx={{ fontSize: '10px', color: 'text.secondary' }}>
+                        🔑 Primary Form Identifier: <b>{schema.contextIdField}</b> (will match <code>{pkCol}</code>)
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" sx={{ fontSize: '10px', color: '#d97706' }}>
+                        ⚠️ No Primary Identifier configured in schema. System will auto-generate a random UUID for execution tracking.
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })()}
+              {schema.fields.map((f) => {
+                const isPrimary = schema.contextIdField === f.fieldKey;
+                return (
+                  <Box key={f.fieldKey}>
+                    {isPrimary && (
+                      <Chip
+                        label="🔑 Primary Identifier (Context ID / Form PK)"
+                        size="small"
+                        sx={{
+                          mb: 0.5,
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          bgcolor: 'rgba(20, 184, 166, 0.15)',
+                          color: '#0d9488',
+                          border: '1px solid rgba(20, 184, 166, 0.4)'
+                        }}
+                      />
+                    )}
+                    {f.fieldType === 'BOOLEAN' ? (
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={formValues[f.fieldKey] === true}
+                            onChange={(e) => setFormValues({ ...formValues, [f.fieldKey]: e.target.checked })}
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '12px' }}>
+                            {f.displayName} {f.required && <span style={{ color: '#9c989896' }}>*</span>}
+                          </Typography>
+                        }
+                      />
+                    ) : (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={`${f.displayName}${f.required ? ' *' : ''}`}
+                        type={f.fieldType === 'NUMBER' ? 'number' : 'text'}
+                        value={formValues[f.fieldKey] ?? ''}
+                        onChange={(e) => setFormValues({ ...formValues, [f.fieldKey]: e.target.value })}
+                        placeholder={f.defaultValue || ''}
+                        helperText={isPrimary ? `${f.description || ''} [Updates POSTPAID_ONBOARD_CAF PK]`.trim() : f.description}
+                        slotProps={{
+                          input: { sx: { color: '#000000ff', fontSize: '12px', fontWeight: isPrimary ? 600 : 'normal' } },
+                          formHelperText: { sx: { fontSize: '9px', color: isPrimary ? '#0d9488' : 'text.secondary' } }
+                        }}
+                        sx={{
+                          '& .MuiOutlinedInput-notchedOutline': {
+                            borderColor: isPrimary ? '#14b8a6' : 'rgba(78, 76, 76, 0.38)',
+                            borderWidth: isPrimary ? '1.5px' : '1px'
+                          },
+                          '& .MuiInputLabel-root': { fontSize: '12px', color: isPrimary ? '#0d9488' : undefined },
+                        }}
+                      />
+                    )}
+                  </Box>
+                );
+              })}
             </Box>
           )}
         </Box>

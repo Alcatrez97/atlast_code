@@ -30,6 +30,18 @@ public class ContextSchema {
     @Column(name = "circle_id")
     private Integer circleId;
 
+    @Column(name = "context_id_field", length = 100)
+    private String contextIdField;
+
+    @Column(name = "target_table", length = 100)
+    private String targetTable;
+
+    @Column(name = "target_pk_column", length = 100)
+    private String targetPkColumn;
+
+    @Column(name = "target_status_column", length = 100)
+    private String targetStatusColumn;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -78,4 +90,16 @@ public class ContextSchema {
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }
+
+    public String getContextIdField() { return contextIdField; }
+    public void setContextIdField(String contextIdField) { this.contextIdField = contextIdField; }
+
+    public String getTargetTable() { return targetTable; }
+    public void setTargetTable(String targetTable) { this.targetTable = targetTable; }
+
+    public String getTargetPkColumn() { return targetPkColumn; }
+    public void setTargetPkColumn(String targetPkColumn) { this.targetPkColumn = targetPkColumn; }
+
+    public String getTargetStatusColumn() { return targetStatusColumn; }
+    public void setTargetStatusColumn(String targetStatusColumn) { this.targetStatusColumn = targetStatusColumn; }
 }

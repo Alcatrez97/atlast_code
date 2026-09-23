@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.service;
 
+import com.vi.atlas.common.dto.ContextSchemaDto;
 import com.vi.atlas.common.dto.ExecutionLogDto;
 import com.vi.atlas.common.dto.ExecutionRequestDto;
 import com.vi.atlas.common.dto.StepRecordDto;
@@ -172,10 +173,12 @@ public class ExecutionService {
 
         String businessKey = request.getBusinessKey();
         if (businessKey == null || businessKey.isBlank()) {
-            businessKey = (String) context.get("businessKey");
+            Object bKey = context.get("businessKey");
+            if (bKey != null) businessKey = String.valueOf(bKey);
         }
         if (businessKey == null || businessKey.isBlank()) {
-            businessKey = (String) context.get("cafId");
+            Object cId = context.get("cafId");
+            if (cId != null) businessKey = String.valueOf(cId);
         }
         if (businessKey == null || businessKey.isBlank()) {
             Object txnId = context.get("transactionId");
@@ -189,13 +192,53 @@ public class ExecutionService {
             Object trackingId = context.get("trackingId");
             if (trackingId != null) businessKey = String.valueOf(trackingId);
         }
+
+        // Resolve primary contextId (Form / CAF / Order identifier)
+        String contextId = request.getContextId();
+        if (contextId == null || contextId.isBlank()) {
+            try {
+                Optional<ContextSchemaDto> schemaOpt = contextSchemaService.getSchemaByKey(workflowKey);
+                if (schemaOpt.isPresent() && schemaOpt.get().getContextIdField() != null && !schemaOpt.get().getContextIdField().isBlank()) {
+                    Object schemaVal = context.get(schemaOpt.get().getContextIdField());
+                    if (schemaVal != null) {
+                        contextId = String.valueOf(schemaVal);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed resolving schema contextIdField for {}: {}", workflowKey, e.getMessage());
+            }
+        }
+        if (contextId == null || contextId.isBlank()) {
+            Object cid = context.get("contextId");
+            if (cid != null) contextId = String.valueOf(cid);
+        }
+        if (contextId == null || contextId.isBlank()) {
+            Object cafId = context.get("cafId");
+            if (cafId != null) contextId = String.valueOf(cafId);
+        }
+        if (contextId == null || contextId.isBlank()) {
+            Object trackingId = context.get("trackingId");
+            if (trackingId != null) contextId = String.valueOf(trackingId);
+        }
+        if (contextId == null || contextId.isBlank()) {
+            if (businessKey != null && !businessKey.isBlank()) {
+                contextId = businessKey;
+            } else {
+                contextId = UUID.randomUUID().toString();
+            }
+        }
+        context.putIfAbsent("contextId", contextId);
+
+        if (businessKey == null || businessKey.isBlank()) {
+            businessKey = contextId;
+        }
         if (businessKey == null || businessKey.isBlank()) {
             businessKey = "BK-" + instanceId.substring(0, 8);
         }
         instance.setBusinessKey(businessKey);
 
         log.info("Starting workflow execution. workflowKey={}, version={}, contextId={}, businessKey={}, context={}",
-                workflowKey, version.getVersion(), request.getContextId(), businessKey, context);
+                workflowKey, version.getVersion(), contextId, businessKey, context);
 
         instance.setVersionId(version.getId());
         instance.setVersionNumber(version.getVersion());
@@ -206,9 +249,6 @@ public class ExecutionService {
 
         // Prepare execution log entity
         String execId = UUID.randomUUID().toString();
-        String contextId = (request.getContextId() != null && !request.getContextId().isBlank())
-                ? request.getContextId()
-                : UUID.randomUUID().toString();
 
         // Validate context against the schema pre-flight
         ValidationResultDto valResult = contextSchemaService.validateContext(workflowKey, context);

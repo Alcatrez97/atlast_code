@@ -39,6 +39,16 @@ public class DatabaseMigrationRunner {
                 log.info("Successfully renamed table workflow_customer_forms to POSTPAID_ONBOARD_CAF.");
             }
 
+            if (!tableExists(stmt, "POSTPAID_ONBOARD_COCP")) {
+                stmt.execute("CREATE TABLE POSTPAID_ONBOARD_COCP (" +
+                        "cocp_id VARCHAR(100) PRIMARY KEY, " +
+                        "company_name VARCHAR(255), " +
+                        "form_status VARCHAR(100), " +
+                        "circle_id INT, " +
+                        "updated_at TIMESTAMP)");
+                log.info("Created table POSTPAID_ONBOARD_COCP successfully.");
+            }
+
             // 1. Rename primary key 'id' columns if they exist
             renameColumnIfExist(stmt, "workflow_buckets", "id", "bucket_pk");
             renameColumnIfExist(stmt, "workflow_bucket_executions", "id", "bucket_execution_pk");
@@ -46,6 +56,7 @@ public class DatabaseMigrationRunner {
             renameColumnIfExist(stmt, "workflow_context_schemas", "id", "context_schema_pk");
             renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "id", "caf_id");
             renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "customer_form_pk", "caf_id");
+            dropColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "customer_name");
             renameColumnIfExist(stmt, "workflow_execution_logs", "id", "execution_log_pk");
             renameColumnIfExist(stmt, "workflow_integration_registry", "id", "integration_pk");
             renameColumnIfExist(stmt, "workflow_revert_status", "id", "revert_status_pk");
@@ -65,7 +76,12 @@ public class DatabaseMigrationRunner {
             alterColumnLengthIfExist(stmt, "workflow_task_instances", "task_instance_pk", 255);
             alterColumnTypeToIntegerIfExist(stmt, "workflow_definitions", "circle_id");
             alterColumnTypeToIntegerIfExist(stmt, "workflow_versions", "circle_id");
+            alterColumnTypeToBigIntIfExist(stmt, "POSTPAID_ONBOARD_CAF", "caf_id");
             addColumnIfNotExist(stmt, "workflow_instances", "opt_lock_version", "BIGINT DEFAULT 0");
+            addColumnIfNotExist(stmt, "workflow_context_schemas", "context_id_field", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_table", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_pk_column", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_status_column", "VARCHAR(100)");
 
             // Re-enable referential integrity
             try {
@@ -206,6 +222,21 @@ public class DatabaseMigrationRunner {
         }
     }
 
+    private void alterColumnTypeToBigIntIfExist(Statement stmt, String tableName, String colName) throws Exception {
+        if (tableExists(stmt, tableName) && columnExists(stmt, tableName, colName)) {
+            try {
+                // Delete test rows that have non-numeric PK so type alteration succeeds
+                stmt.execute(String.format("DELETE FROM %s WHERE %s IS NOT NULL AND %s NOT REGEXP '^[0-9]+$'", tableName, colName, colName));
+            } catch (Exception ignored) {}
+            try {
+                stmt.execute(String.format("ALTER TABLE %s ALTER COLUMN %s BIGINT", tableName, colName));
+                log.info("Successfully altered {}.{} to BIGINT.", tableName, colName);
+            } catch (Exception e) {
+                log.debug("Could not alter {}.{} to BIGINT: {}", tableName, colName, e.getMessage());
+            }
+        }
+    }
+
     private void alterColumnLengthIfExist(Statement stmt, String tableName, String colName, int newLength) throws Exception {
         if (tableExists(stmt, tableName) && columnExists(stmt, tableName, colName)) {
             log.info("Altering column {}.{} length to {}...", tableName, colName, newLength);
@@ -224,6 +255,14 @@ public class DatabaseMigrationRunner {
             String sql = String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, colName, colDefinition);
             stmt.execute(sql);
             log.info("Successfully added column {}.{}.", tableName, colName);
+        }
+    }
+
+    private void dropColumnIfExist(Statement stmt, String tableName, String colName) throws Exception {
+        if (tableExists(stmt, tableName) && columnExists(stmt, tableName, colName)) {
+            log.info("Dropping column {}.{}...", tableName, colName);
+            stmt.execute(String.format("ALTER TABLE %s DROP COLUMN %s", tableName, colName));
+            log.info("Successfully dropped column {}.{}.", tableName, colName);
         }
     }
 }

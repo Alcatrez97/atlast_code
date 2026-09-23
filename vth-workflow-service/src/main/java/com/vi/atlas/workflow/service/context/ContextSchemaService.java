@@ -46,6 +46,11 @@ public class ContextSchemaService {
             schema = existingOpt.get();
             schema.setName(dto.getName());
             schema.setDescription(dto.getDescription());
+            schema.setCircleId(dto.getCircleId());
+            schema.setContextIdField(dto.getContextIdField());
+            schema.setTargetTable(dto.getTargetTable());
+            schema.setTargetPkColumn(dto.getTargetPkColumn());
+            schema.setTargetStatusColumn(dto.getTargetStatusColumn());
             schema.setUpdatedAt(LocalDateTime.now());
             // Clear existing fields to replace them
             schema.getFields().clear();
@@ -56,6 +61,10 @@ public class ContextSchemaService {
             schema.setName(dto.getName());
             schema.setDescription(dto.getDescription());
             schema.setCircleId(dto.getCircleId());
+            schema.setContextIdField(dto.getContextIdField());
+            schema.setTargetTable(dto.getTargetTable());
+            schema.setTargetPkColumn(dto.getTargetPkColumn());
+            schema.setTargetStatusColumn(dto.getTargetStatusColumn());
         }
 
         // Save schema first to get transactional context
@@ -248,6 +257,10 @@ public class ContextSchemaService {
         dto.setName(schema.getName());
         dto.setDescription(schema.getDescription());
         dto.setCircleId(schema.getCircleId());
+        dto.setContextIdField(schema.getContextIdField());
+        dto.setTargetTable(schema.getTargetTable());
+        dto.setTargetPkColumn(schema.getTargetPkColumn());
+        dto.setTargetStatusColumn(schema.getTargetStatusColumn());
         dto.setCreatedAt(schema.getCreatedAt());
         dto.setUpdatedAt(schema.getUpdatedAt());
         

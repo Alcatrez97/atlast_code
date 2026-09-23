@@ -44,6 +44,9 @@ public class BucketResolutionService {
     private ExecutionRepository executionRepository;
 
     @Autowired
+    private com.vi.atlas.workflow.service.domain.EntityStatusSyncService entityStatusSyncService;
+
+    @Autowired
     private com.vi.atlas.workflow.repository.BucketRepository bucketRepository;
 
     @Autowired
@@ -107,34 +110,22 @@ public class BucketResolutionService {
         if (formId == null) {
             formId = businessKey;
         }
-        Optional<CustomerForm> formOpt = customerFormRepository.findById(formId);
-        if (formOpt.isPresent()) {
-            CustomerForm form = formOpt.get();
-            
-            // Check if there are other pending buckets for the same instance
-            List<RevertStatus> allReverts = revertStatusRepository.findByWorkflowInstanceIdOrderByCreatedAtDesc(instanceId);
-            RevertStatus nextPending = null;
-            for (RevertStatus rs : allReverts) {
-                if (!rs.getBucketId().equals(bucketId) && "PENDING".equalsIgnoreCase(rs.getStatus())) {
-                    nextPending = rs;
-                    break;
-                }
+        // Check if there are other pending buckets for the same instance
+        List<RevertStatus> allReverts = revertStatusRepository.findByWorkflowInstanceIdOrderByCreatedAtDesc(instanceId);
+        RevertStatus nextPending = null;
+        for (RevertStatus rs : allReverts) {
+            if (!rs.getBucketId().equals(bucketId) && "PENDING".equalsIgnoreCase(rs.getStatus())) {
+                nextPending = rs;
+                break;
             }
-
-            if (nextPending != null) {
-                String pendingStatus = nextPending.getBucketId() + " Pending";
-                form.setFormStatus(pendingStatus);
-                log.info("Other pending bucket(s) exist. Setting CustomerForm status to '{}'", pendingStatus);
-            } else {
-                String mappedStatus = deriveFormStatus(bucketId, outcome);
-                form.setFormStatus(mappedStatus);
-                log.info("No other pending buckets. Setting CustomerForm status to '{}'", mappedStatus);
-            }
-            customerFormRepository.save(form);
-            log.info("Successfully updated CustomerForm ID: {} status to '{}'", formId, form.getFormStatus());
-        } else {
-            log.info("No CustomerForm found with ID: {}. Skipping status update.", formId);
         }
+
+        String mappedStatus = nextPending != null
+                ? nextPending.getBucketId() + " Pending"
+                : deriveFormStatus(bucketId, outcome);
+
+        String workflowKey = instOpt.map(WorkflowInstance::getWorkflowKey).orElse(null);
+        entityStatusSyncService.syncStatus(workflowKey, formId, mappedStatus, bucketId);
 
         // 4. Trigger engine resumption through EventRoutingService
         Map<String, Object> additionalContext = new HashMap<>();

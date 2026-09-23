@@ -34,6 +34,7 @@ public class BucketSuspensionManager {
     @Autowired private CustomerFormRepository        customerFormRepository;
     @Autowired private BucketExecutionRepository     bucketExecutionRepository;
     @Autowired private BucketRepository              bucketRepository;
+    @Autowired private com.vi.atlas.workflow.service.domain.EntityStatusSyncService entityStatusSyncService;
 
     // -----------------------------------------------------------------------
     // CustomerForm + RevertStatus
@@ -63,21 +64,11 @@ public class BucketSuspensionManager {
             return;
         }
 
-        // 1. Update or create CustomerForm
-        Optional<CustomerForm> formOpt = customerFormRepository.findById(formId);
-        if (formOpt.isPresent()) {
-            CustomerForm form = formOpt.get();
-            form.setFormStatus(bucketId + " Pending");
-            customerFormRepository.save(form);
-            log.info("Updated CustomerForm status to '{} Pending' for formId={}", bucketId, formId);
-        } else {
-            CustomerForm form = new CustomerForm();
-            form.setId(formId);
-            form.setCustomerName("Customer_" + formId.substring(0, Math.min(formId.length(), 8)));
-            form.setFormStatus(bucketId + " Pending");
-            customerFormRepository.save(form);
-            log.info("Created CustomerForm with status '{} Pending' for formId={}", bucketId, formId);
-        }
+        // 1. Update or create domain entity status
+        String workflowKey = version != null && version.getWorkflowDefinition() != null
+                ? version.getWorkflowDefinition().getKey()
+                : null;
+        entityStatusSyncService.syncStatus(workflowKey, formId, bucketId + " Pending", bucketId);
 
         // 2. Find the previous completed step to chain the revert trail
         String previousStepId = null;

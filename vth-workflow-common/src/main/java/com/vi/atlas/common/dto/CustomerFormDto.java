@@ -8,28 +8,28 @@ import java.time.LocalDateTime;
 public class CustomerFormDto implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private String id;
-    private String customerName;
+    @Schema(description = "Numeric CAF ID", example = "100234")
+    private Long id;
     private String formStatus;
     private Integer circleId;
     private LocalDateTime updatedAt;
 
     public CustomerFormDto() {}
 
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
-    public String getCustomerName() {
-        return customerName;
+    public Long getCafId() {
+        return id;
     }
 
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
+    public void setCafId(Long cafId) {
+        this.id = cafId;
     }
 
     public String getFormStatus() {

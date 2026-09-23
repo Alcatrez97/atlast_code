@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Button, Card, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, Paper, TextField, InputAdornment, Tooltip, IconButton, Chip, Drawer, Badge, Container, Select, MenuItem, FormControl, TablePagination, TableSortLabel } from '@mui/material';
+import { Box, Typography, Button, Card, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, Paper, TextField, InputAdornment, Tooltip, IconButton, Chip, Drawer, Badge, Container, Select, MenuItem, FormControl, TablePagination, TableSortLabel, Autocomplete } from '@mui/material';
 import { Plus, Search, Trash2, History, Play, PlayCircle, Copy, ArrowUpDown } from 'lucide-react';
 import GlobeIcon from '@mui/icons-material/Public';
 import CircleIcon from '@mui/icons-material/TripOrigin';
@@ -45,14 +45,15 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
             setSortOrder(field === 'updatedAt' || field === 'versions' ? 'desc' : 'asc');
         }
         setPage(0);
-    };
-
-    // Filter workflows
+    };    // Filter workflows with safe null-checks and trimmed query
     const filteredWorkflows = useMemo(() => {
+        const query = searchTerm.trim().toLowerCase();
         return workflows.filter(w => {
-            const matchesSearch = w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                w.key.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                w.description?.toLowerCase().includes(searchTerm.toLowerCase());
+            if (!query) return true;
+            const nameMatch = (w.name || '').toLowerCase().includes(query);
+            const keyMatch = (w.key || '').toLowerCase().includes(query);
+            const descMatch = (w.description || '').toLowerCase().includes(query);
+            const matchesSearch = nameMatch || keyMatch || descMatch;
 
             let matchesCircle = true;
             if (circleFilter !== 'ALL') {
@@ -172,21 +173,27 @@ export const ManageWorkflowsPage = ({ onOpenCreate, onOpenVersions, onDeleteWork
         <Card sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
           {/* Controls bar: Search, Circle Filter, Sort By */}
           <Box sx={{ p: 2.5, display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(255,255,255,0.01)', gap: 2 }}>
-            <TextField size="small" placeholder="Search workflows by key, name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} slotProps={{
-            input: {
-                startAdornment: (<InputAdornment position="start">
-                      <Search size={18} color="#82838E"/>
-                    </InputAdornment>),
+            <TextField
+              size="small"
+              placeholder="Search workflows by key, name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={18} color="#82838E" />
+                  </InputAdornment>
+                ),
                 sx: {
-                    borderRadius: 2,
-                    bgcolor: 'rgba(0,0,0,0.05)',
-                    width: 320,
-                    '.MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'divider'
-                    }
+                  borderRadius: 2,
+                  bgcolor: 'rgba(0,0,0,0.05)',
+                  width: 320,
+                  '.MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'divider'
+                  }
                 }
-            }
-        }}/>
+              }}
+            />
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
               {/* Circle Filter Dropdown */}

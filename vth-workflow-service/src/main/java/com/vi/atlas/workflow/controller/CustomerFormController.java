@@ -84,7 +84,11 @@ public class CustomerFormController {
     @GetMapping("/{id}")
     @Operation(summary = "Get form by ID", description = "Retrieves customer form document details by ID")
     public ResponseEntity<CustomerFormDto> getFormById(@PathVariable String id) {
-        return repository.findById(id)
+        Long cafId = CustomerForm.parseCafId(id);
+        if (cafId == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return repository.findById(cafId)
                 .map(entity -> ResponseEntity.ok(toDto(entity)))
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -100,14 +104,22 @@ public class CustomerFormController {
             throw new IllegalArgumentException("Status is required.");
         }
 
-        return repository.findById(id)
+        Long cafId = CustomerForm.parseCafId(id);
+        if (cafId == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return repository.findById(cafId)
                 .map(entity -> {
                     // Update CustomerForm first
                     entity.setFormStatus(newStatus);
                     CustomerForm saved = repository.save(entity);
 
                     // Find active WAITING executions for this form ID
-                    List<com.vi.atlas.workflow.entity.ExecutionLog> logs = executionRepository.findByContextIdAndStatus(id, com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING);
+                    List<com.vi.atlas.workflow.entity.ExecutionLog> logs = executionRepository.findByContextIdAndStatus(String.valueOf(cafId), com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING);
+                    if (logs.isEmpty() && !id.equals(String.valueOf(cafId))) {
+                        logs = executionRepository.findByContextIdAndStatus(id, com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING);
+                    }
                     if (!logs.isEmpty()) {
                         for (com.vi.atlas.workflow.entity.ExecutionLog logEntry : logs) {
                             String instanceId = logEntry.getInstanceId();
@@ -150,7 +162,6 @@ public class CustomerFormController {
     private CustomerFormDto toDto(CustomerForm entity) {
         CustomerFormDto dto = new CustomerFormDto();
         dto.setId(entity.getId());
-        dto.setCustomerName(entity.getCustomerName());
         dto.setFormStatus(entity.getFormStatus());
         dto.setCircleId(entity.getCircleId());
         dto.setUpdatedAt(entity.getUpdatedAt());

@@ -32,7 +32,13 @@ public class KafkaEventListener {
      * Listen to 'caf-lifecycle' topic to start a new workflow execution.
      */
     @KafkaListener(topics = "caf-lifecycle", groupId = "atlas-workflow-group")
-    public void handleCafSubmission(CafSubmittedEvent event) {
+    public void handleCafSubmission(Object rawPayload) {
+        CafSubmittedEvent event;
+        if (rawPayload instanceof CafSubmittedEvent cse) {
+            event = cse;
+        } else {
+            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(rawPayload, CafSubmittedEvent.class);
+        }
         log.info("Received CafSubmittedEvent: cafId={}, workflowKey={}", event.getCafId(), event.getWorkflowKey());
         try {
             ExecutionRequestDto request = new ExecutionRequestDto();
@@ -52,8 +58,14 @@ public class KafkaEventListener {
      * Listen to 'workflow-bucket-resolution' topic to resolve bucket manual tasks.
      */
     @KafkaListener(topics = "workflow-bucket-resolution", groupId = "atlas-workflow-group")
-    public void handleBucketResolution(@org.springframework.messaging.handler.annotation.Payload BucketResolutionEvent event,
+    public void handleBucketResolution(@org.springframework.messaging.handler.annotation.Payload Object rawPayload,
                                        @org.springframework.messaging.handler.annotation.Header(value = "X-User-Id", required = false) String userId) {
+        BucketResolutionEvent event;
+        if (rawPayload instanceof BucketResolutionEvent bre) {
+            event = bre;
+        } else {
+            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(rawPayload, BucketResolutionEvent.class);
+        }
         log.info("Received BucketResolutionEvent: instanceId={}, bucketId={}, outcome={}",
                 event.getInstanceId(), event.getBucketId(), event.getOutcome());
         

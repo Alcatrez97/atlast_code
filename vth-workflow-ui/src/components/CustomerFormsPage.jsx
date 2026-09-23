@@ -317,8 +317,7 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
             <Table>
               <TableHead>
                 <TableRow sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none' }}>FORM ID (CONTEXT_ID)</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none' }}>CUSTOMER NAME</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none' }}>CAF ID (LONG)</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none' }}>CURRENT STATUS</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none' }}>LAST UPDATED</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '11px', border: 'none', textAlign: 'right' }}>SIMULATOR ACTIONS</TableCell>
@@ -332,11 +331,8 @@ export const CustomerFormsPage = ({ onShowNotification }) => {
                         borderBottom: '1px solid rgba(255,255,255,0.04)',
                         '&:hover': { bgcolor: 'rgba(255,255,255,0.01)' }
                     }}>
-                      <TableCell sx={{ fontFamily: 'monospace', color: '#000000', fontSize: '13px', border: 'none' }}>
+                      <TableCell sx={{ fontFamily: 'monospace', color: 'text.primary', fontSize: '13px', border: 'none' }}>
                         {form.id}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, border: 'none' }}>
-                        {form.customerName || 'N/A'}
                       </TableCell>
                       <TableCell sx={{ border: 'none' }}>
                         {getStatusChip(form.formStatus)}

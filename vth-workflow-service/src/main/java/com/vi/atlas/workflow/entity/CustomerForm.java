@@ -8,11 +8,8 @@ import java.time.LocalDateTime;
 public class CustomerForm {
 
     @Id
-    @Column(name = "caf_id", length = 100)
-    private String id; // UUID or tracking CAF ID, matches engine's contextId
-
-    @Column(name = "customer_name", length = 255)
-    private String customerName;
+    @Column(name = "caf_id")
+    private Long id; // Numeric CAF ID, Long type
 
     @Column(name = "form_status", length = 100)
     private String formStatus; // e.g., A2 Pending, A2Accept, A2Reject
@@ -25,26 +22,32 @@ public class CustomerForm {
 
     public CustomerForm() {}
 
+    public CustomerForm(Long id, String formStatus, Integer circleId) {
+        this.id = id;
+        this.formStatus = formStatus;
+        this.circleId = circleId;
+    }
+
     @PrePersist
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
-    public String getCustomerName() {
-        return customerName;
+    public Long getCafId() {
+        return id;
     }
 
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
+    public void setCafId(Long cafId) {
+        this.id = cafId;
     }
 
     public String getFormStatus() {
@@ -70,4 +73,26 @@ public class CustomerForm {
     public void setCircleId(Integer circleId) {
         this.circleId = circleId;
     }
+
+    /**
+     * Safely converts any Object, String, or Number into a valid Long cafId.
+     */
+    public static Long parseCafId(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) return n.longValue();
+        String s = value.toString().trim();
+        if (s.isEmpty()) return null;
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            String digits = s.replaceAll("\\D+", "");
+            if (!digits.isEmpty() && digits.length() <= 18) {
+                try {
+                    return Long.parseLong(digits);
+                } catch (NumberFormatException ignored) {}
+            }
+            return (long) Math.abs(s.hashCode());
+        }
+    }
 }
+

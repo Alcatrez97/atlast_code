@@ -13,6 +13,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useWorkflowStore } from '../store/workflowStore.js';
 import { Checkbox, ListItemText } from '@mui/material';
+import { ResumeInstructionsDialog } from './ResumeInstructionsDialog.jsx';
 
 const CIRCLE_OPTIONS = [
   { id: 101, label: '101 - MH (Maharashtra)', badge: 'MH', color: '#00A05A' },
@@ -44,11 +45,9 @@ export const WorkflowInstancesPage = ({ onShowNotification }) => {
       setSelectedCircles(selectedCircleIds);
     }
   }, [selectedCircleIds]);
-  // Resume dialog state
+  // Resume instructions dialog state
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
-  const [resumeInstanceId, setResumeInstanceId] = useState(null);
-  const [additionalContextJson, setAdditionalContextJson] = useState('{\n  \n}');
-  const [resuming, setResuming] = useState(false);
+  const [selectedResumeInstance, setSelectedResumeInstance] = useState(null);
   // Revert status logs state
   const [revertLogs, setRevertLogs] = useState({});
   const [loadingRevert, setLoadingRevert] = useState({});
@@ -118,46 +117,14 @@ export const WorkflowInstancesPage = ({ onShowNotification }) => {
       fetchRevertStatus(id);
     }
   };
-  const handleOpenResume = (id, e) => {
+  const handleOpenResume = (inst, e) => {
     e.stopPropagation();
-    setResumeInstanceId(id);
+    setSelectedResumeInstance(inst);
     setResumeDialogOpen(true);
   };
   const handleCloseResume = () => {
     setResumeDialogOpen(false);
-    setResumeInstanceId(null);
-    setAdditionalContextJson('{\n  \n}');
-  };
-  const handleResumeSubmit = async () => {
-    if (!resumeInstanceId)
-      return;
-    let payload = {};
-    try {
-      payload = JSON.parse(additionalContextJson);
-    }
-    catch (e) {
-      onShowNotification('Invalid additional context JSON format', 'error');
-      return;
-    }
-    setResuming(true);
-    try {
-      const res = await fetch(`/api/instances/${resumeInstanceId}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok)
-        throw new Error('Failed to resume workflow instance');
-      onShowNotification('Workflow instance resumed successfully', 'success');
-      handleCloseResume();
-      await fetchInstancesAndExecutions();
-    }
-    catch (err) {
-      onShowNotification(err.message, 'error');
-    }
-    finally {
-      setResuming(false);
-    }
+    setSelectedResumeInstance(null);
   };
   const handleLaunchReplay = (run) => {
     // Find matching workflow and version
@@ -440,7 +407,7 @@ export const WorkflowInstancesPage = ({ onShowNotification }) => {
 
                   {/* Action Column */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }} onClick={(e) => e.stopPropagation()}>
-                    {isWaiting && (<Button variant="contained" size="small" startIcon={<PlayArrowIcon />} onClick={(e) => handleOpenResume(inst.id, e)} sx={{
+                    {isWaiting && (<Button variant="contained" size="small" startIcon={<PlayArrowIcon />} onClick={(e) => handleOpenResume(inst, e)} sx={{
                       background: `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
                       fontWeight: 700,
                       px: 2, py: 0.75,
@@ -669,39 +636,14 @@ export const WorkflowInstancesPage = ({ onShowNotification }) => {
         </Box>
       </Box>)}
 
-      {/* Resume Variable Dialog */}
-      <Dialog open={resumeDialogOpen} onClose={handleCloseResume} fullWidth maxWidth="sm" slotProps={{
-        paper: {
-          sx: { bgcolor: 'background.paper', color: 'text.primary', border: '1px solid', borderColor: 'divider' }
-        }
-      }}>
-        <DialogTitle sx={{ fontWeight: 800 }}>Resume Workflow Instance</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-            Input any additional context variables to inject into the execution state before manual resumption. Ensure it is valid JSON.
-          </Typography>
-          <TextField multiline rows={8} fullWidth value={additionalContextJson} onChange={(e) => setAdditionalContextJson(e.target.value)} sx={{
-            '& .MuiOutlinedInput-root': {
-              color: 'text.primary',
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              bgcolor: 'background.default',
-              '& fieldset': { borderColor: 'divider' },
-              '&:hover fieldset': { borderColor: accentColor },
-              '&.Mui-focused fieldset': { borderColor: accentColor },
-            }
-          }} />
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseResume} sx={{ color: 'text.secondary' }}>Cancel</Button>
-          <Button variant="contained" onClick={handleResumeSubmit} disabled={resuming} sx={{
-            background: `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
-            fontWeight: 700
-          }}>
-            {resuming ? <CircularProgress size={20} color="inherit" /> : 'Confirm & Resume'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Resume Instructions & Mitigations Dialog */}
+      <ResumeInstructionsDialog
+        open={resumeDialogOpen}
+        onClose={handleCloseResume}
+        instance={selectedResumeInstance}
+        onShowNotification={onShowNotification}
+        onSuccess={fetchInstancesAndExecutions}
+      />
     </Container>
   </Box>);
 };

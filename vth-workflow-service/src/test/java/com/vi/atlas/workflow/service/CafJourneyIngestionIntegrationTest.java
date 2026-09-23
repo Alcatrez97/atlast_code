@@ -201,7 +201,7 @@ public class CafJourneyIngestionIntegrationTest {
         assertEquals("STAGED", stagedDocs.get().getStatus());
 
         // Golden record must NOT exist yet
-        Optional<CustomerForm> formBeforeCaf = customerFormRepository.findById(trackingId);
+        Optional<CustomerForm> formBeforeCaf = customerFormRepository.findById(CustomerForm.parseCafId(trackingId));
         assertTrue(formBeforeCaf.isEmpty(), "Golden CustomerForm should NOT be created before CAF arrives");
 
         // 2. Client calls Submit CAF API second
@@ -218,9 +218,8 @@ public class CafJourneyIngestionIntegrationTest {
         assertTrue(cafResult.finalized());
 
         // Verify golden CustomerForm record created atomically
-        Optional<CustomerForm> formAfterCaf = customerFormRepository.findById(trackingId);
+        Optional<CustomerForm> formAfterCaf = customerFormRepository.findById(CustomerForm.parseCafId(trackingId));
         assertTrue(formAfterCaf.isPresent(), "Golden CustomerForm must be created after both APIs arrive");
-        assertEquals("Priya Sharma", formAfterCaf.get().getCustomerName());
         assertEquals("CAF_SUBMITTED_AND_ACTIVE", formAfterCaf.get().getFormStatus());
 
         // Verify staged payloads marked as CONSUMED
@@ -250,7 +249,7 @@ public class CafJourneyIngestionIntegrationTest {
         assertFalse(cafResult.finalized());
 
         // Golden record must NOT exist yet
-        Optional<CustomerForm> formBeforeDocs = customerFormRepository.findById(trackingId);
+        Optional<CustomerForm> formBeforeDocs = customerFormRepository.findById(CustomerForm.parseCafId(trackingId));
         assertTrue(formBeforeDocs.isEmpty(), "Golden CustomerForm should NOT be created before Documents arrive");
 
         // 2. Client calls Submit Documents API second
@@ -266,9 +265,8 @@ public class CafJourneyIngestionIntegrationTest {
         assertTrue(docsResult.finalized());
 
         // Verify golden CustomerForm record created atomically
-        Optional<CustomerForm> formAfterDocs = customerFormRepository.findById(trackingId);
+        Optional<CustomerForm> formAfterDocs = customerFormRepository.findById(CustomerForm.parseCafId(trackingId));
         assertTrue(formAfterDocs.isPresent(), "Golden CustomerForm must be created after both APIs arrive");
-        assertEquals("Rohit Verma", formAfterDocs.get().getCustomerName());
         assertEquals("CAF_SUBMITTED_AND_ACTIVE", formAfterDocs.get().getFormStatus());
 
         // Verify staged payloads marked as CONSUMED
@@ -302,6 +300,5 @@ public class CafJourneyIngestionIntegrationTest {
         Map<String, Object> statusFinal = ingestionService.getJourneyStatus(trackingId);
         assertEquals("COMPLETED", statusFinal.get("workflowStatus"));
         assertEquals(true, statusFinal.get("goldenRecordCreated"));
-        assertEquals("Neha Gupta", statusFinal.get("customerName"));
     }
 }

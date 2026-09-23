@@ -31,6 +31,18 @@ public class ContextSchemaDto implements Serializable {
     @Schema(description = "Timestamp when the schema was updated", readOnly = true)
     private LocalDateTime updatedAt;
 
+    @Schema(description = "The context field key designated as the primary context / form identifier", example = "cafId")
+    private String contextIdField;
+
+    @Schema(description = "Optional explicit override of target database table for bucket status updates", example = "POSTPAID_ONBOARD_CAF")
+    private String targetTable;
+
+    @Schema(description = "Optional explicit override of primary key column in target database table", example = "caf_id")
+    private String targetPkColumn;
+
+    @Schema(description = "Optional explicit override of status column in target database table", example = "form_status")
+    private String targetStatusColumn;
+
     @Schema(description = "Ordered list of fields that make up this context schema description")
     private List<ContextFieldDto> fields = new ArrayList<>();
 
@@ -61,4 +73,16 @@ public class ContextSchemaDto implements Serializable {
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }
+
+    public String getContextIdField() { return contextIdField; }
+    public void setContextIdField(String contextIdField) { this.contextIdField = contextIdField; }
+
+    public String getTargetTable() { return targetTable; }
+    public void setTargetTable(String targetTable) { this.targetTable = targetTable; }
+
+    public String getTargetPkColumn() { return targetPkColumn; }
+    public void setTargetPkColumn(String targetPkColumn) { this.targetPkColumn = targetPkColumn; }
+
+    public String getTargetStatusColumn() { return targetStatusColumn; }
+    public void setTargetStatusColumn(String targetStatusColumn) { this.targetStatusColumn = targetStatusColumn; }
 }
