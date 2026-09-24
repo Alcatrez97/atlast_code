@@ -3,7 +3,7 @@
 -- =============================================================================
 -- Target Database: Oracle Database 12c / 18c / 19c / 21c / 23c
 -- Generated Date: 2026-09-24
--- Description: Complete production-ready DDL script with 'workflow_' prefix for all 18 tables,
+-- Description: Complete production-ready DDL script with 'postpaid_' prefix for all 18 tables,
 --              including DROP statements, TABLE definitions, PRIMARY KEYS, FOREIGN KEYS,
 --              UNIQUE CONSTRAINTS, CHECK CONSTRAINTS, and INDEXES.
 --              Fully synchronized with JPA Entities in com.vi.atlas.workflow.entity.*
@@ -17,91 +17,91 @@ ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';
 -- =============================================================================
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_execution_log_details CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_execution_log_details CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_bucket_executions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_bucket_executions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_execution_logs CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_execution_logs CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_revert_status CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_revert_status CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_subscriptions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_event_subscriptions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_task_instances CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_task_instances CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_instances CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_instances CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_versions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_versions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_definitions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_definitions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_context_fields CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_context_fields CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_context_schemas CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_context_schemas CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_integration_registry CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_integration_registry CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_definitions CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_event_definitions CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_rules CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_rules CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_buckets CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_buckets CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
@@ -119,11 +119,92 @@ END;
 /
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP TABLE workflow_customer_forms CASCADE CONSTRAINTS';
+    EXECUTE IMMEDIATE 'DROP TABLE postpaid_workflow_staged_payloads CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
 END;
 /
 
+-- Legacy table drops (safe backward-compatibility cleanup)
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_execution_log_details CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_bucket_executions CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_execution_logs CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_revert_status CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_subscriptions CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_task_instances CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_instances CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_versions CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_definitions CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_context_fields CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_context_schemas CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_integration_registry CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_event_definitions CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_rules CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_buckets CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE workflow_customer_forms CASCADE CONSTRAINTS';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE workflow_staged_payloads CASCADE CONSTRAINTS';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF;
@@ -135,8 +216,8 @@ END;
 -- SECTION 2: WORKFLOW CORE DEFINITION & VERSIONING TABLES
 -- =============================================================================
 
--- 1. WORKFLOW DEFINITIONS TABLE
-CREATE TABLE workflow_definitions (
+-- 1. POSTPAID WORKFLOW DEFINITIONS TABLE
+CREATE TABLE postpaid_workflow_definitions (
     workflow_definition_pk  VARCHAR2(36 CHAR) NOT NULL,
     name                    VARCHAR2(255 CHAR) NOT NULL,
     wf_key                  VARCHAR2(100 CHAR) NOT NULL,
@@ -151,11 +232,11 @@ CREATE TABLE workflow_definitions (
     CONSTRAINT chk_wf_def_active CHECK (active IN (0, 1))
 );
 
-CREATE UNIQUE INDEX idx_wf_def_key ON workflow_definitions(wf_key);
+CREATE UNIQUE INDEX idx_wf_def_key ON postpaid_workflow_definitions(wf_key);
 
 
--- 2. WORKFLOW VERSIONS TABLE
-CREATE TABLE workflow_versions (
+-- 2. POSTPAID WORKFLOW VERSIONS TABLE
+CREATE TABLE postpaid_workflow_versions (
     workflow_version_pk     VARCHAR2(36 CHAR) NOT NULL,
     workflow_definition_id  VARCHAR2(36 CHAR) NOT NULL,
     version                 NUMBER(10,0) NOT NULL,
@@ -169,19 +250,19 @@ CREATE TABLE workflow_versions (
     CONSTRAINT pk_workflow_ver PRIMARY KEY (workflow_version_pk),
     CONSTRAINT uq_wf_version UNIQUE (workflow_definition_id, version),
     CONSTRAINT fk_ver_wf_def FOREIGN KEY (workflow_definition_id) 
-        REFERENCES workflow_definitions(workflow_definition_pk) ON DELETE CASCADE
+        REFERENCES postpaid_workflow_definitions(workflow_definition_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_wf_ver_status ON workflow_versions(status);
-CREATE INDEX idx_wf_ver_def_id ON workflow_versions(workflow_definition_id);
+CREATE INDEX idx_wf_ver_status ON postpaid_workflow_versions(status);
+CREATE INDEX idx_wf_ver_def_id ON postpaid_workflow_versions(workflow_definition_id);
 
 
 -- =============================================================================
 -- SECTION 3: WORKFLOW RUNTIME EXECUTION & TASK TABLES
 -- =============================================================================
 
--- 3. WORKFLOW INSTANCES TABLE
-CREATE TABLE workflow_instances (
+-- 3. POSTPAID WORKFLOW INSTANCES TABLE
+CREATE TABLE postpaid_workflow_instances (
     workflow_instance_pk    VARCHAR2(36 CHAR) NOT NULL,
     workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     version_id              VARCHAR2(36 CHAR) NOT NULL,
@@ -197,18 +278,18 @@ CREATE TABLE workflow_instances (
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_workflow_inst PRIMARY KEY (workflow_instance_pk),
     CONSTRAINT fk_inst_version FOREIGN KEY (version_id) 
-        REFERENCES workflow_versions(workflow_version_pk)
+        REFERENCES postpaid_workflow_versions(workflow_version_pk)
 );
 
-CREATE INDEX idx_inst_wf_key ON workflow_instances(workflow_key);
-CREATE INDEX idx_inst_status ON workflow_instances(status);
-CREATE INDEX idx_inst_created_at ON workflow_instances(created_at);
-CREATE INDEX idx_inst_biz_key ON workflow_instances(business_key);
-CREATE INDEX idx_inst_version_id ON workflow_instances(version_id);
+CREATE INDEX idx_inst_wf_key ON postpaid_workflow_instances(workflow_key);
+CREATE INDEX idx_inst_status ON postpaid_workflow_instances(status);
+CREATE INDEX idx_inst_created_at ON postpaid_workflow_instances(created_at);
+CREATE INDEX idx_inst_biz_key ON postpaid_workflow_instances(business_key);
+CREATE INDEX idx_inst_version_id ON postpaid_workflow_instances(version_id);
 
 
--- 4. WORKFLOW TASK INSTANCES TABLE
-CREATE TABLE workflow_task_instances (
+-- 4. POSTPAID WORKFLOW TASK INSTANCES TABLE
+CREATE TABLE postpaid_workflow_task_instances (
     task_instance_pk        VARCHAR2(255 CHAR) NOT NULL,
     instance_id             VARCHAR2(36 CHAR) NOT NULL,
     task_type               VARCHAR2(50 CHAR) NOT NULL,
@@ -221,16 +302,16 @@ CREATE TABLE workflow_task_instances (
     completed_at            TIMESTAMP(6),
     CONSTRAINT pk_task_inst PRIMARY KEY (task_instance_pk),
     CONSTRAINT fk_task_inst_workflow FOREIGN KEY (instance_id) 
-        REFERENCES workflow_instances(workflow_instance_pk) ON DELETE CASCADE
+        REFERENCES postpaid_workflow_instances(workflow_instance_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_task_inst_parent ON workflow_task_instances(instance_id);
-CREATE INDEX idx_task_inst_status ON workflow_task_instances(status);
-CREATE INDEX idx_task_inst_type ON workflow_task_instances(task_type);
+CREATE INDEX idx_task_inst_parent ON postpaid_workflow_task_instances(instance_id);
+CREATE INDEX idx_task_inst_status ON postpaid_workflow_task_instances(status);
+CREATE INDEX idx_task_inst_type ON postpaid_workflow_task_instances(task_type);
 
 
--- 5. WORKFLOW EVENT SUBSCRIPTIONS TABLE
-CREATE TABLE workflow_event_subscriptions (
+-- 5. POSTPAID WORKFLOW EVENT SUBSCRIPTIONS TABLE
+CREATE TABLE postpaid_workflow_event_subscriptions (
     event_subscription_pk   VARCHAR2(36 CHAR) NOT NULL,
     instance_id             VARCHAR2(36 CHAR) NOT NULL,
     business_key            VARCHAR2(100 CHAR) NOT NULL,
@@ -242,22 +323,22 @@ CREATE TABLE workflow_event_subscriptions (
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_event_sub PRIMARY KEY (event_subscription_pk),
     CONSTRAINT fk_sub_workflow_instance FOREIGN KEY (instance_id) 
-        REFERENCES workflow_instances(workflow_instance_pk) ON DELETE CASCADE
+        REFERENCES postpaid_workflow_instances(workflow_instance_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_event_sub_bkey ON workflow_event_subscriptions(business_key);
-CREATE INDEX idx_event_sub_type ON workflow_event_subscriptions(event_type);
-CREATE INDEX idx_event_sub_status ON workflow_event_subscriptions(status);
-CREATE INDEX idx_event_sub_instance ON workflow_event_subscriptions(instance_id);
-CREATE INDEX idx_event_sub_lookup ON workflow_event_subscriptions(business_key, event_type, status);
+CREATE INDEX idx_event_sub_bkey ON postpaid_workflow_event_subscriptions(business_key);
+CREATE INDEX idx_event_sub_type ON postpaid_workflow_event_subscriptions(event_type);
+CREATE INDEX idx_event_sub_status ON postpaid_workflow_event_subscriptions(status);
+CREATE INDEX idx_event_sub_instance ON postpaid_workflow_event_subscriptions(instance_id);
+CREATE INDEX idx_event_sub_lookup ON postpaid_workflow_event_subscriptions(business_key, event_type, status);
 
 
 -- =============================================================================
 -- SECTION 4: AUDIT, LOGGING & REVERT TABLES (VERTICAL PARTITIONING)
 -- =============================================================================
 
--- 6. WORKFLOW EXECUTION LOGS TABLE (LIGHTWEIGHT SUMMARY)
-CREATE TABLE workflow_execution_logs (
+-- 6. POSTPAID WORKFLOW EXECUTION LOGS TABLE (LIGHTWEIGHT SUMMARY)
+CREATE TABLE postpaid_workflow_execution_logs (
     execution_log_pk        VARCHAR2(36 CHAR) NOT NULL,
     workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     version_id              VARCHAR2(36 CHAR),
@@ -277,29 +358,29 @@ CREATE TABLE workflow_execution_logs (
     completed_at            TIMESTAMP(6),
     CONSTRAINT pk_exec_log PRIMARY KEY (execution_log_pk),
     CONSTRAINT fk_exec_log_version FOREIGN KEY (version_id) 
-        REFERENCES workflow_versions(workflow_version_pk) ON DELETE SET NULL
+        REFERENCES postpaid_workflow_versions(workflow_version_pk) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_exec_wf_key ON workflow_execution_logs(workflow_key);
-CREATE INDEX idx_exec_status ON workflow_execution_logs(status);
-CREATE INDEX idx_exec_started_at ON workflow_execution_logs(started_at);
-CREATE INDEX idx_exec_inst_id ON workflow_execution_logs(instance_id);
-CREATE INDEX idx_exec_version_id ON workflow_execution_logs(version_id);
+CREATE INDEX idx_exec_wf_key ON postpaid_workflow_execution_logs(workflow_key);
+CREATE INDEX idx_exec_status ON postpaid_workflow_execution_logs(status);
+CREATE INDEX idx_exec_started_at ON postpaid_workflow_execution_logs(started_at);
+CREATE INDEX idx_exec_inst_id ON postpaid_workflow_execution_logs(instance_id);
+CREATE INDEX idx_exec_version_id ON postpaid_workflow_execution_logs(version_id);
 
 
--- 7. WORKFLOW EXECUTION LOG DETAILS TABLE (VERTICAL PARTITION 1:1 WITH EXECUTION LOG)
-CREATE TABLE workflow_execution_log_details (
+-- 7. POSTPAID WORKFLOW EXECUTION LOG DETAILS TABLE (VERTICAL PARTITION 1:1 WITH EXECUTION LOG)
+CREATE TABLE postpaid_workflow_execution_log_details (
     log_id                  VARCHAR2(36 CHAR) NOT NULL,
     input_context_json      CLOB,
     execution_trace_json    CLOB,
     CONSTRAINT pk_exec_detail PRIMARY KEY (log_id),
     CONSTRAINT fk_exec_detail_log FOREIGN KEY (log_id) 
-        REFERENCES workflow_execution_logs(execution_log_pk) ON DELETE CASCADE
+        REFERENCES postpaid_workflow_execution_logs(execution_log_pk) ON DELETE CASCADE
 );
 
 
--- 8. WORKFLOW REVERT STATUS TABLE
-CREATE TABLE workflow_revert_status (
+-- 8. POSTPAID WORKFLOW REVERT STATUS TABLE
+CREATE TABLE postpaid_workflow_revert_status (
     revert_status_pk        VARCHAR2(36 CHAR) NOT NULL,
     workflow_instance_id    VARCHAR2(36 CHAR) NOT NULL,
     form_id                 VARCHAR2(100 CHAR) NOT NULL,
@@ -316,18 +397,18 @@ CREATE TABLE workflow_revert_status (
     CONSTRAINT pk_revert_status PRIMARY KEY (revert_status_pk)
 );
 
-CREATE INDEX idx_revert_inst_id ON workflow_revert_status(workflow_instance_id);
-CREATE INDEX idx_revert_form_id ON workflow_revert_status(form_id);
-CREATE INDEX idx_revert_bucket_id ON workflow_revert_status(bucket_id);
-CREATE INDEX idx_revert_status ON workflow_revert_status(status);
+CREATE INDEX idx_revert_inst_id ON postpaid_workflow_revert_status(workflow_instance_id);
+CREATE INDEX idx_revert_form_id ON postpaid_workflow_revert_status(form_id);
+CREATE INDEX idx_revert_bucket_id ON postpaid_workflow_revert_status(bucket_id);
+CREATE INDEX idx_revert_status ON postpaid_workflow_revert_status(status);
 
 
 -- =============================================================================
 -- SECTION 5: BUCKETS & TASK MANAGEMENT TABLES
 -- =============================================================================
 
--- 9. WORKFLOW BUCKETS TABLE
-CREATE TABLE workflow_buckets (
+-- 9. POSTPAID WORKFLOW BUCKETS TABLE
+CREATE TABLE postpaid_workflow_buckets (
     bucket_pk               VARCHAR2(36 CHAR) NOT NULL,
     bucket_id               VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
@@ -347,13 +428,13 @@ CREATE TABLE workflow_buckets (
     CONSTRAINT chk_bucket_active CHECK (active IN (0, 1))
 );
 
-CREATE UNIQUE INDEX idx_bucket_id ON workflow_buckets(bucket_id);
-CREATE INDEX idx_bucket_priority ON workflow_buckets(priority);
-CREATE INDEX idx_bucket_active ON workflow_buckets(active);
+CREATE UNIQUE INDEX idx_bucket_id ON postpaid_workflow_buckets(bucket_id);
+CREATE INDEX idx_bucket_priority ON postpaid_workflow_buckets(priority);
+CREATE INDEX idx_bucket_active ON postpaid_workflow_buckets(active);
 
 
--- 10. WORKFLOW BUCKET EXECUTIONS TABLE
-CREATE TABLE workflow_bucket_executions (
+-- 10. POSTPAID WORKFLOW BUCKET EXECUTIONS TABLE
+CREATE TABLE postpaid_workflow_bucket_executions (
     bucket_execution_pk     VARCHAR2(36 CHAR) NOT NULL,
     execution_log_id        VARCHAR2(36 CHAR) NOT NULL,
     instance_id             VARCHAR2(36 CHAR),
@@ -370,25 +451,25 @@ CREATE TABLE workflow_bucket_executions (
     resolution_notes        VARCHAR2(2000 CHAR),
     CONSTRAINT pk_bucket_exec PRIMARY KEY (bucket_execution_pk),
     CONSTRAINT fk_bex_exec_log FOREIGN KEY (execution_log_id)
-        REFERENCES workflow_execution_logs(execution_log_pk) ON DELETE CASCADE,
+        REFERENCES postpaid_workflow_execution_logs(execution_log_pk) ON DELETE CASCADE,
     CONSTRAINT fk_bex_instance FOREIGN KEY (instance_id)
-        REFERENCES workflow_instances(workflow_instance_pk) ON DELETE CASCADE
+        REFERENCES postpaid_workflow_instances(workflow_instance_pk) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_bex_bucket_id ON workflow_bucket_executions(bucket_id);
-CREATE INDEX idx_bex_status ON workflow_bucket_executions(status);
-CREATE INDEX idx_bex_workflow_key ON workflow_bucket_executions(workflow_key);
-CREATE INDEX idx_bex_exec_log_id ON workflow_bucket_executions(execution_log_id);
-CREATE INDEX idx_bex_created_at ON workflow_bucket_executions(created_at);
-CREATE INDEX idx_bex_instance_id ON workflow_bucket_executions(instance_id);
+CREATE INDEX idx_bex_bucket_id ON postpaid_workflow_bucket_executions(bucket_id);
+CREATE INDEX idx_bex_status ON postpaid_workflow_bucket_executions(status);
+CREATE INDEX idx_bex_workflow_key ON postpaid_workflow_bucket_executions(workflow_key);
+CREATE INDEX idx_bex_exec_log_id ON postpaid_workflow_bucket_executions(execution_log_id);
+CREATE INDEX idx_bex_created_at ON postpaid_workflow_bucket_executions(created_at);
+CREATE INDEX idx_bex_instance_id ON postpaid_workflow_bucket_executions(instance_id);
 
 
 -- =============================================================================
 -- SECTION 6: CONTEXT CATALOG, RULES & INTEGRATIONS TABLES
 -- =============================================================================
 
--- 11. WORKFLOW RULES TABLE
-CREATE TABLE workflow_rules (
+-- 11. POSTPAID WORKFLOW RULES TABLE
+CREATE TABLE postpaid_workflow_rules (
     rule_pk                 VARCHAR2(36 CHAR) NOT NULL,
     rule_key                VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
@@ -403,12 +484,12 @@ CREATE TABLE workflow_rules (
     CONSTRAINT chk_rule_active CHECK (active IN (0, 1))
 );
 
-CREATE UNIQUE INDEX idx_rule_key ON workflow_rules(rule_key);
-CREATE INDEX idx_rule_active ON workflow_rules(active);
+CREATE UNIQUE INDEX idx_rule_key ON postpaid_workflow_rules(rule_key);
+CREATE INDEX idx_rule_active ON postpaid_workflow_rules(active);
 
 
--- 12. WORKFLOW CONTEXT SCHEMAS TABLE
-CREATE TABLE workflow_context_schemas (
+-- 12. POSTPAID WORKFLOW CONTEXT SCHEMAS TABLE
+CREATE TABLE postpaid_workflow_context_schemas (
     context_schema_pk       VARCHAR2(36 CHAR) NOT NULL,
     workflow_key            VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
@@ -424,11 +505,11 @@ CREATE TABLE workflow_context_schemas (
     CONSTRAINT uq_ctx_workflow_key UNIQUE (workflow_key)
 );
 
-CREATE UNIQUE INDEX idx_ctx_schema_key ON workflow_context_schemas(workflow_key);
+CREATE UNIQUE INDEX idx_ctx_schema_key ON postpaid_workflow_context_schemas(workflow_key);
 
 
--- 13. WORKFLOW INTEGRATION REGISTRY TABLE
-CREATE TABLE workflow_integration_registry (
+-- 13. POSTPAID WORKFLOW INTEGRATION REGISTRY TABLE
+CREATE TABLE postpaid_workflow_integration_registry (
     integration_pk          VARCHAR2(36 CHAR) NOT NULL,
     integration_key         VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
@@ -445,11 +526,11 @@ CREATE TABLE workflow_integration_registry (
     CONSTRAINT uq_integration_key UNIQUE (integration_key)
 );
 
-CREATE UNIQUE INDEX idx_integration_key ON workflow_integration_registry(integration_key);
+CREATE UNIQUE INDEX idx_integration_key ON postpaid_workflow_integration_registry(integration_key);
 
 
--- 14. WORKFLOW CONTEXT FIELDS TABLE
-CREATE TABLE workflow_context_fields (
+-- 14. POSTPAID WORKFLOW CONTEXT FIELDS TABLE
+CREATE TABLE postpaid_workflow_context_fields (
     context_field_pk        VARCHAR2(36 CHAR) NOT NULL,
     schema_id               VARCHAR2(36 CHAR) NOT NULL,
     field_key               VARCHAR2(100 CHAR) NOT NULL,
@@ -468,20 +549,20 @@ CREATE TABLE workflow_context_fields (
     circle_id               NUMBER(10,0),
     CONSTRAINT pk_ctx_field PRIMARY KEY (context_field_pk),
     CONSTRAINT fk_field_schema FOREIGN KEY (schema_id) 
-        REFERENCES workflow_context_schemas(context_schema_pk) ON DELETE CASCADE,
+        REFERENCES postpaid_workflow_context_schemas(context_schema_pk) ON DELETE CASCADE,
     CONSTRAINT fk_ctx_field_integration FOREIGN KEY (integration_id)
-        REFERENCES workflow_integration_registry(integration_pk) ON DELETE SET NULL,
+        REFERENCES postpaid_workflow_integration_registry(integration_pk) ON DELETE SET NULL,
     CONSTRAINT chk_field_required CHECK (required IN (0, 1)),
     CONSTRAINT chk_field_cacheable CHECK (cacheable IN (0, 1))
 );
 
-CREATE INDEX idx_ctx_field_schema ON workflow_context_fields(schema_id);
-CREATE INDEX idx_ctx_field_key ON workflow_context_fields(field_key);
-CREATE INDEX idx_ctx_field_integration ON workflow_context_fields(integration_id);
+CREATE INDEX idx_ctx_field_schema ON postpaid_workflow_context_fields(schema_id);
+CREATE INDEX idx_ctx_field_key ON postpaid_workflow_context_fields(field_key);
+CREATE INDEX idx_ctx_field_integration ON postpaid_workflow_context_fields(integration_id);
 
 
--- 15. WORKFLOW EVENT DEFINITIONS TABLE
-CREATE TABLE workflow_event_definitions (
+-- 15. POSTPAID WORKFLOW EVENT DEFINITIONS TABLE
+CREATE TABLE postpaid_workflow_event_definitions (
     event_definition_pk     VARCHAR2(36 CHAR) NOT NULL,
     event_key               VARCHAR2(100 CHAR) NOT NULL,
     name                    VARCHAR2(200 CHAR) NOT NULL,
@@ -498,8 +579,8 @@ CREATE TABLE workflow_event_definitions (
     CONSTRAINT chk_event_active CHECK (active IN (0, 1))
 );
 
-CREATE UNIQUE INDEX idx_event_def_key ON workflow_event_definitions(event_key);
-CREATE INDEX idx_event_def_active ON workflow_event_definitions(active);
+CREATE UNIQUE INDEX idx_event_def_key ON postpaid_workflow_event_definitions(event_key);
+CREATE INDEX idx_event_def_active ON postpaid_workflow_event_definitions(active);
 
 
 -- 16. POSTPAID ONBOARD CAF TABLE (CUSTOMER / CAF DOMAIN)
@@ -514,8 +595,8 @@ CREATE TABLE POSTPAID_ONBOARD_CAF (
 CREATE INDEX idx_poc_form_status ON POSTPAID_ONBOARD_CAF(form_status);
 
 
--- 17. WORKFLOW STAGED PAYLOADS TABLE (PRE-SUBMISSION / OUT-OF-ORDER STAGING)
-CREATE TABLE workflow_staged_payloads (
+-- 17. POSTPAID WORKFLOW STAGED PAYLOADS TABLE (PRE-SUBMISSION / OUT-OF-ORDER STAGING)
+CREATE TABLE postpaid_workflow_staged_payloads (
     staged_payload_pk       VARCHAR2(36 CHAR) NOT NULL,
     business_key            VARCHAR2(100 CHAR) NOT NULL,
     payload_type            VARCHAR2(50 CHAR) NOT NULL, -- DOCUMENTS, CAF, FAMILY_GROUP
@@ -527,9 +608,9 @@ CREATE TABLE workflow_staged_payloads (
     CONSTRAINT pk_staged_payload PRIMARY KEY (staged_payload_pk)
 );
 
-CREATE INDEX idx_staged_biz_key ON workflow_staged_payloads(business_key);
-CREATE INDEX idx_staged_type ON workflow_staged_payloads(payload_type);
-CREATE INDEX idx_staged_status ON workflow_staged_payloads(status);
+CREATE INDEX idx_staged_biz_key ON postpaid_workflow_staged_payloads(business_key);
+CREATE INDEX idx_staged_type ON postpaid_workflow_staged_payloads(payload_type);
+CREATE INDEX idx_staged_status ON postpaid_workflow_staged_payloads(status);
 
 
 -- 18. POSTPAID ONBOARD COCP TABLE (ENTERPRISE / COCP DOMAIN)

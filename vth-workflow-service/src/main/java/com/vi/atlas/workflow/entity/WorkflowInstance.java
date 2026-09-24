@@ -10,7 +10,7 @@ import java.util.HashMap;
  * Tracks the execution state and lifecycle of a running workflow instance.
  */
 @Entity
-@Table(name = "workflow_instances", indexes = {
+@Table(name = "postpaid_workflow_instances", indexes = {
     @Index(name = "idx_inst_wf_key", columnList = "workflow_key"),
     @Index(name = "idx_inst_status", columnList = "status"),
     @Index(name = "idx_inst_created_at", columnList = "created_at")

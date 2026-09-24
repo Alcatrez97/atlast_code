@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "workflow_definitions", indexes = {
+@Table(name = "postpaid_workflow_definitions", indexes = {
     @Index(name = "idx_wf_def_key", columnList = "wf_key", unique = true)
 })
 public class WorkflowDefinition {

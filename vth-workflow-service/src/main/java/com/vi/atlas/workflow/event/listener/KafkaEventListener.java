@@ -32,12 +32,22 @@ public class KafkaEventListener {
      * Listen to 'caf-lifecycle' topic to start a new workflow execution.
      */
     @KafkaListener(topics = "caf-lifecycle", groupId = "atlas-workflow-group")
-    public void handleCafSubmission(Object rawPayload) {
+    public void handleCafSubmission(@org.springframework.messaging.handler.annotation.Payload Object rawPayload) {
+        Object payload = rawPayload;
+        if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> cr) {
+            payload = cr.value();
+        }
         CafSubmittedEvent event;
-        if (rawPayload instanceof CafSubmittedEvent cse) {
+        if (payload instanceof CafSubmittedEvent cse) {
             event = cse;
+        } else if (payload instanceof String str) {
+            try {
+                event = new com.fasterxml.jackson.databind.ObjectMapper().readValue(str, CafSubmittedEvent.class);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("Failed to deserialize CafSubmittedEvent JSON string", ex);
+            }
         } else {
-            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(rawPayload, CafSubmittedEvent.class);
+            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(payload, CafSubmittedEvent.class);
         }
         log.info("Received CafSubmittedEvent: cafId={}, workflowKey={}", event.getCafId(), event.getWorkflowKey());
         try {
@@ -60,11 +70,21 @@ public class KafkaEventListener {
     @KafkaListener(topics = "workflow-bucket-resolution", groupId = "atlas-workflow-group")
     public void handleBucketResolution(@org.springframework.messaging.handler.annotation.Payload Object rawPayload,
                                        @org.springframework.messaging.handler.annotation.Header(value = "X-User-Id", required = false) String userId) {
+        Object payload = rawPayload;
+        if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> cr) {
+            payload = cr.value();
+        }
         BucketResolutionEvent event;
-        if (rawPayload instanceof BucketResolutionEvent bre) {
+        if (payload instanceof BucketResolutionEvent bre) {
             event = bre;
+        } else if (payload instanceof String str) {
+            try {
+                event = new com.fasterxml.jackson.databind.ObjectMapper().readValue(str, BucketResolutionEvent.class);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("Failed to deserialize BucketResolutionEvent JSON string", ex);
+            }
         } else {
-            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(rawPayload, BucketResolutionEvent.class);
+            event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(payload, BucketResolutionEvent.class);
         }
         log.info("Received BucketResolutionEvent: instanceId={}, bucketId={}, outcome={}",
                 event.getInstanceId(), event.getBucketId(), event.getOutcome());

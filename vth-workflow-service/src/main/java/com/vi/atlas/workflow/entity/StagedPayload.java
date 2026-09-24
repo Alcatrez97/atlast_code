@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Entity
-@Table(name = "workflow_staged_payloads", indexes = {
+@Table(name = "postpaid_workflow_staged_payloads", indexes = {
     @Index(name = "idx_staged_biz_key", columnList = "business_key"),
     @Index(name = "idx_staged_type", columnList = "payload_type")
 })

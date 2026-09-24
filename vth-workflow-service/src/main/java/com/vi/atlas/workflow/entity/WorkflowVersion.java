@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "workflow_versions", uniqueConstraints = {
+@Table(name = "postpaid_workflow_versions", uniqueConstraints = {
     @UniqueConstraint(name = "uq_wf_version", columnNames = {"workflow_definition_id", "version"})
 }, indexes = {
     @Index(name = "idx_wf_ver_status", columnList = "status")

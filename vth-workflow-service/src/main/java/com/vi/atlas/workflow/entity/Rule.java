@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Referenced by RULE nodes via ruleKey.
  */
 @Entity
-@Table(name = "workflow_rules", indexes = {
+@Table(name = "postpaid_workflow_rules", indexes = {
     @Index(name = "idx_rule_key", columnList = "rule_key", unique = true),
     @Index(name = "idx_rule_active", columnList = "active")
 })

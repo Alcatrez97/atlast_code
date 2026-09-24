@@ -32,12 +32,24 @@ public class DatabaseMigrationRunner {
                 log.debug("Could not disable referential integrity: {}", e.getMessage());
             }
 
-            // Rename workflow_customer_forms table to POSTPAID_ONBOARD_CAF if it exists
-            if (tableExists(stmt, "workflow_customer_forms") && !tableExists(stmt, "POSTPAID_ONBOARD_CAF")) {
-                log.info("Renaming table workflow_customer_forms to POSTPAID_ONBOARD_CAF...");
-                stmt.execute("ALTER TABLE workflow_customer_forms RENAME TO POSTPAID_ONBOARD_CAF");
-                log.info("Successfully renamed table workflow_customer_forms to POSTPAID_ONBOARD_CAF.");
-            }
+            // Rename legacy tables to new postpaid_ prefix
+            renameTableIfExist(stmt, "workflow_customer_forms", "POSTPAID_ONBOARD_CAF");
+            renameTableIfExist(stmt, "workflow_buckets", "postpaid_workflow_buckets");
+            renameTableIfExist(stmt, "workflow_bucket_executions", "postpaid_workflow_bucket_executions");
+            renameTableIfExist(stmt, "workflow_context_fields", "postpaid_workflow_context_fields");
+            renameTableIfExist(stmt, "workflow_context_schemas", "postpaid_workflow_context_schemas");
+            renameTableIfExist(stmt, "workflow_execution_logs", "postpaid_workflow_execution_logs");
+            renameTableIfExist(stmt, "workflow_execution_log_details", "postpaid_workflow_execution_log_details");
+            renameTableIfExist(stmt, "workflow_integration_registry", "postpaid_workflow_integration_registry");
+            renameTableIfExist(stmt, "workflow_revert_status", "postpaid_workflow_revert_status");
+            renameTableIfExist(stmt, "workflow_rules", "postpaid_workflow_rules");
+            renameTableIfExist(stmt, "workflow_definitions", "postpaid_workflow_definitions");
+            renameTableIfExist(stmt, "workflow_instances", "postpaid_workflow_instances");
+            renameTableIfExist(stmt, "workflow_versions", "postpaid_workflow_versions");
+            renameTableIfExist(stmt, "workflow_event_definitions", "postpaid_workflow_event_definitions");
+            renameTableIfExist(stmt, "workflow_event_subscriptions", "postpaid_workflow_event_subscriptions");
+            renameTableIfExist(stmt, "workflow_task_instances", "postpaid_workflow_task_instances");
+            renameTableIfExist(stmt, "workflow_staged_payloads", "postpaid_workflow_staged_payloads");
 
             if (!tableExists(stmt, "POSTPAID_ONBOARD_COCP")) {
                 stmt.execute("CREATE TABLE POSTPAID_ONBOARD_COCP (" +
@@ -50,21 +62,21 @@ public class DatabaseMigrationRunner {
             }
 
             // 1. Rename primary key 'id' columns if they exist
-            renameColumnIfExist(stmt, "workflow_buckets", "id", "bucket_pk");
-            renameColumnIfExist(stmt, "workflow_bucket_executions", "id", "bucket_execution_pk");
-            renameColumnIfExist(stmt, "workflow_context_fields", "id", "context_field_pk");
-            renameColumnIfExist(stmt, "workflow_context_schemas", "id", "context_schema_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_buckets", "id", "bucket_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_bucket_executions", "id", "bucket_execution_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_context_fields", "id", "context_field_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_context_schemas", "id", "context_schema_pk");
             renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "id", "caf_id");
             renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "customer_form_pk", "caf_id");
             dropColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "customer_name");
-            renameColumnIfExist(stmt, "workflow_execution_logs", "id", "execution_log_pk");
-            renameColumnIfExist(stmt, "workflow_integration_registry", "id", "integration_pk");
-            renameColumnIfExist(stmt, "workflow_revert_status", "id", "revert_status_pk");
-            renameColumnIfExist(stmt, "workflow_rules", "id", "rule_pk");
-            renameColumnIfExist(stmt, "workflow_definitions", "id", "workflow_definition_pk");
-            renameColumnIfExist(stmt, "workflow_instances", "id", "workflow_instance_pk");
-            renameColumnIfExist(stmt, "workflow_versions", "id", "workflow_version_pk");
-            renameColumnIfExist(stmt, "workflow_event_definitions", "id", "event_definition_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_execution_logs", "id", "execution_log_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_integration_registry", "id", "integration_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_revert_status", "id", "revert_status_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_rules", "id", "rule_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_definitions", "id", "workflow_definition_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_instances", "id", "workflow_instance_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_versions", "id", "workflow_version_pk");
+            renameColumnIfExist(stmt, "postpaid_workflow_event_definitions", "id", "event_definition_pk");
 
             // 2. Clean up orphaned foreign key data to allow FK constraint creation
             cleanOrphanedData(stmt);
@@ -72,16 +84,16 @@ public class DatabaseMigrationRunner {
             // 3. Heal historical bucket execution data inconsistencies
             healWorkloadDataInconsistency(stmt);
 
-            // 4. Alter column length of workflow_task_instances.task_instance_pk and ensure circle_id columns are INTEGER
-            alterColumnLengthIfExist(stmt, "workflow_task_instances", "task_instance_pk", 255);
-            alterColumnTypeToIntegerIfExist(stmt, "workflow_definitions", "circle_id");
-            alterColumnTypeToIntegerIfExist(stmt, "workflow_versions", "circle_id");
+            // 4. Alter column length of task_instances and ensure types
+            alterColumnLengthIfExist(stmt, "postpaid_workflow_task_instances", "task_instance_pk", 255);
+            alterColumnTypeToIntegerIfExist(stmt, "postpaid_workflow_definitions", "circle_id");
+            alterColumnTypeToIntegerIfExist(stmt, "postpaid_workflow_versions", "circle_id");
             alterColumnTypeToBigIntIfExist(stmt, "POSTPAID_ONBOARD_CAF", "caf_id");
-            addColumnIfNotExist(stmt, "workflow_instances", "opt_lock_version", "BIGINT DEFAULT 0");
-            addColumnIfNotExist(stmt, "workflow_context_schemas", "context_id_field", "VARCHAR(100)");
-            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_table", "VARCHAR(100)");
-            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_pk_column", "VARCHAR(100)");
-            addColumnIfNotExist(stmt, "workflow_context_schemas", "target_status_column", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_instances", "opt_lock_version", "BIGINT DEFAULT 0");
+            addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "context_id_field", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_table", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_pk_column", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_status_column", "VARCHAR(100)");
 
             // Re-enable referential integrity
             try {
@@ -94,6 +106,14 @@ public class DatabaseMigrationRunner {
         } catch (Exception e) {
             log.error("Failed to run database schema migrations: {}", e.getMessage(), e);
             throw new RuntimeException("Database migration failed", e);
+        }
+    }
+
+    private void renameTableIfExist(Statement stmt, String oldTable, String newTable) throws Exception {
+        if (tableExists(stmt, oldTable) && !tableExists(stmt, newTable)) {
+            log.info("Renaming table {} to {}...", oldTable, newTable);
+            stmt.execute(String.format("ALTER TABLE %s RENAME TO %s", oldTable, newTable));
+            log.info("Successfully renamed table {} to {}.", oldTable, newTable);
         }
     }
 
@@ -120,35 +140,36 @@ public class DatabaseMigrationRunner {
     private void cleanOrphanedData(Statement stmt) throws Exception {
         log.info("Cleaning up orphaned records before constraint creation...");
 
-        // Helper to check table existence
-        autoCleanOrphans(stmt, "workflow_bucket_executions", "execution_log_id", "workflow_execution_logs", "execution_log_pk");
-        autoCleanOrphans(stmt, "workflow_bucket_executions", "instance_id", "workflow_instances", "workflow_instance_pk");
-        autoCleanOrphans(stmt, "workflow_instances", "version_id", "workflow_versions", "workflow_version_pk");
-        autoCleanOrphans(stmt, "workflow_execution_logs", "version_id", "workflow_versions", "workflow_version_pk");
-        autoCleanOrphans(stmt, "workflow_execution_logs", "instance_id", "workflow_instances", "workflow_instance_pk");
-        autoCleanOrphans(stmt, "workflow_revert_status", "workflow_instance_id", "workflow_instances", "workflow_instance_pk");
-        autoCleanOrphans(stmt, "workflow_revert_status", "form_id", "POSTPAID_ONBOARD_CAF", "caf_id");
-        autoCleanOrphans(stmt, "workflow_revert_status", "form_id", "workflow_customer_forms", "customer_form_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_bucket_executions", "execution_log_id", "postpaid_workflow_execution_logs", "execution_log_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_bucket_executions", "instance_id", "postpaid_workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_instances", "version_id", "postpaid_workflow_versions", "workflow_version_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_execution_logs", "version_id", "postpaid_workflow_versions", "workflow_version_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_execution_logs", "instance_id", "postpaid_workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_revert_status", "workflow_instance_id", "postpaid_workflow_instances", "workflow_instance_pk");
+        autoCleanOrphans(stmt, "postpaid_workflow_revert_status", "form_id", "POSTPAID_ONBOARD_CAF", "caf_id");
 
-        // Clean context_fields integration_id
-        if (tableExists(stmt, "workflow_context_fields") && tableExists(stmt, "workflow_integration_registry")) {
-            log.info("Cleaning up invalid integration_id references in workflow_context_fields...");
-            stmt.execute("UPDATE workflow_context_fields SET integration_id = NULL " +
+        if (tableExists(stmt, "postpaid_workflow_context_fields") && tableExists(stmt, "postpaid_workflow_integration_registry")) {
+            log.info("Cleaning up invalid integration_id references in postpaid_workflow_context_fields...");
+            stmt.execute("UPDATE postpaid_workflow_context_fields SET integration_id = NULL " +
                          "WHERE integration_id IS NOT NULL " +
-                         "AND integration_id NOT IN (SELECT integration_pk FROM workflow_integration_registry)");
+                         "AND integration_id NOT IN (SELECT integration_pk FROM postpaid_workflow_integration_registry)");
         }
     }
 
     private void autoCleanOrphans(Statement stmt, String childTable, String childFkCol, String parentTable, String parentPkCol) throws Exception {
         if (tableExists(stmt, childTable) && tableExists(stmt, parentTable)) {
-            log.info("Cleaning up orphans in {} on column {}...", childTable, childFkCol);
-            String sql = String.format(
-                    "DELETE FROM %s WHERE %s IS NOT NULL AND %s NOT IN (SELECT %s FROM %s)",
-                    childTable, childFkCol, childFkCol, parentPkCol, parentTable
-            );
-            int deleted = stmt.executeUpdate(sql);
-            if (deleted > 0) {
-                log.info("Deleted {} orphaned records from {}.", deleted, childTable);
+            try {
+                log.info("Cleaning up orphans in {} on column {}...", childTable, childFkCol);
+                String sql = String.format(
+                        "DELETE FROM %s WHERE %s IS NOT NULL AND CAST(%s AS VARCHAR(255)) NOT IN (SELECT CAST(%s AS VARCHAR(255)) FROM %s)",
+                        childTable, childFkCol, childFkCol, parentPkCol, parentTable
+                );
+                int deleted = stmt.executeUpdate(sql);
+                if (deleted > 0) {
+                    log.info("Deleted {} orphaned records from {}.", deleted, childTable);
+                }
+            } catch (Exception e) {
+                log.warn("Could not auto-clean orphans for {}.{} -> {}.{}: {}", childTable, childFkCol, parentTable, parentPkCol, e.getMessage());
             }
         }
     }
@@ -164,27 +185,27 @@ public class DatabaseMigrationRunner {
     }
 
     private void healWorkloadDataInconsistency(Statement stmt) throws Exception {
-        if (tableExists(stmt, "workflow_bucket_executions") && tableExists(stmt, "workflow_instances")) {
+        if (tableExists(stmt, "postpaid_workflow_bucket_executions") && tableExists(stmt, "postpaid_workflow_instances")) {
             log.info("Healing bucket executions for completed workflow instances...");
-            String sql1 = "UPDATE workflow_bucket_executions " +
+            String sql1 = "UPDATE postpaid_workflow_bucket_executions " +
                           "SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP(), resolved_by = 'DataMigrationFix', " +
                           "    resolution_notes = 'Auto-resolved: matching workflow instance is completed' " +
                           "WHERE status <> 'RESOLVED' " +
-                          "AND instance_id IN (SELECT workflow_instance_pk FROM workflow_instances WHERE status = 'COMPLETED')";
+                          "AND instance_id IN (SELECT workflow_instance_pk FROM postpaid_workflow_instances WHERE status = 'COMPLETED')";
             int updated1 = stmt.executeUpdate(sql1);
             if (updated1 > 0) {
                 log.info("Auto-resolved {} bucket executions for completed workflow instances.", updated1);
             }
         }
 
-        if (tableExists(stmt, "workflow_bucket_executions") && tableExists(stmt, "workflow_revert_status")) {
+        if (tableExists(stmt, "postpaid_workflow_bucket_executions") && tableExists(stmt, "postpaid_workflow_revert_status")) {
             log.info("Healing bucket executions for completed reverts...");
-            String sql2 = "UPDATE workflow_bucket_executions be " +
+            String sql2 = "UPDATE postpaid_workflow_bucket_executions be " +
                           "SET be.status = 'RESOLVED', be.resolved_at = CURRENT_TIMESTAMP(), be.resolved_by = 'DataMigrationFix', " +
                           "    be.resolution_notes = 'Auto-resolved: matching revert status is completed' " +
                           "WHERE be.status <> 'RESOLVED' " +
                           "AND EXISTS (" +
-                          "    SELECT 1 FROM workflow_revert_status rs " +
+                          "    SELECT 1 FROM postpaid_workflow_revert_status rs " +
                           "    WHERE rs.workflow_instance_id = be.instance_id " +
                           "      AND rs.bucket_id = be.bucket_id " +
                           "      AND rs.status = 'COMPLETED'" +

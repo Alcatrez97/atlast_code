@@ -4,12 +4,12 @@
 -- Target Database: Oracle Database 12c / 18c / 19c / 21c / 23c (Compatible with DBeaver)
 -- Description: Automated verification script to validate table setup,
 --              Primary Keys, Foreign Key relationships, orphan records,
---              and missing FK indexes across all 17 workflow tables.
+--              and missing FK indexes across all 18 postpaid tables.
 -- =============================================================================
 
 -- =============================================================================
 -- 1. TABLE INVENTORY & ROW COUNTS
--- Verifies all 17 engine tables exist in your schema (16 WORKFLOW_* + POSTPAID_ONBOARD_CAF)
+-- Verifies all 18 engine tables exist in your schema (16 POSTPAID_WORKFLOW_* + 2 POSTPAID_ONBOARD_*)
 -- =============================================================================
 SELECT 
     t.table_name,
@@ -17,8 +17,7 @@ SELECT
     t.status,
     t.last_analyzed
 FROM user_tables t
-WHERE t.table_name LIKE 'WORKFLOW_%' 
-   OR t.table_name = 'POSTPAID_ONBOARD_CAF'
+WHERE t.table_name LIKE 'POSTPAID_%'
 ORDER BY t.table_name;
 
 
@@ -43,7 +42,7 @@ JOIN user_cons_columns col_r
     ON c_pk.constraint_name = col_r.constraint_name 
     AND col_a.position = col_r.position
 WHERE a.constraint_type = 'R'
-  AND (a.table_name LIKE 'WORKFLOW_%' OR a.table_name = 'POSTPAID_ONBOARD_CAF')
+  AND a.table_name LIKE 'POSTPAID_%'
 ORDER BY a.table_name, a.constraint_name;
 
 
@@ -60,7 +59,7 @@ FROM user_constraints c
 JOIN user_cons_columns cc 
     ON c.constraint_name = cc.constraint_name
 WHERE c.constraint_type = 'P'
-  AND (c.table_name LIKE 'WORKFLOW_%' OR c.table_name = 'POSTPAID_ONBOARD_CAF')
+  AND c.table_name LIKE 'POSTPAID_%'
 ORDER BY c.table_name;
 
 
@@ -68,78 +67,78 @@ ORDER BY c.table_name;
 -- 4. REFERENTIAL INTEGRITY / ORPHAN RECORD AUDIT
 -- Returns 0 rows if all FK relationships are healthy and consistent
 -- =============================================================================
-SELECT 'workflow_versions without workflow_definition' AS issue_type, COUNT(*) AS orphan_count
-FROM workflow_versions v
-LEFT JOIN workflow_definitions d ON v.workflow_definition_id = d.workflow_definition_pk
+SELECT 'postpaid_workflow_versions without workflow_definition' AS issue_type, COUNT(*) AS orphan_count
+FROM postpaid_workflow_versions v
+LEFT JOIN postpaid_workflow_definitions d ON v.workflow_definition_id = d.workflow_definition_pk
 WHERE d.workflow_definition_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_instances without workflow_version', COUNT(*)
-FROM workflow_instances i
-LEFT JOIN workflow_versions v ON i.version_id = v.workflow_version_pk
+SELECT 'postpaid_workflow_instances without workflow_version', COUNT(*)
+FROM postpaid_workflow_instances i
+LEFT JOIN postpaid_workflow_versions v ON i.version_id = v.workflow_version_pk
 WHERE v.workflow_version_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_task_instances without workflow_instance', COUNT(*)
-FROM workflow_task_instances t
-LEFT JOIN workflow_instances i ON t.instance_id = i.workflow_instance_pk
+SELECT 'postpaid_workflow_task_instances without workflow_instance', COUNT(*)
+FROM postpaid_workflow_task_instances t
+LEFT JOIN postpaid_workflow_instances i ON t.instance_id = i.workflow_instance_pk
 WHERE i.workflow_instance_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_event_subscriptions without workflow_instance', COUNT(*)
-FROM workflow_event_subscriptions s
-LEFT JOIN workflow_instances i ON s.instance_id = i.workflow_instance_pk
+SELECT 'postpaid_workflow_event_subscriptions without workflow_instance', COUNT(*)
+FROM postpaid_workflow_event_subscriptions s
+LEFT JOIN postpaid_workflow_instances i ON s.instance_id = i.workflow_instance_pk
 WHERE i.workflow_instance_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_execution_logs without workflow_version', COUNT(*)
-FROM workflow_execution_logs l
-LEFT JOIN workflow_versions v ON l.version_id = v.workflow_version_pk
+SELECT 'postpaid_workflow_execution_logs without workflow_version', COUNT(*)
+FROM postpaid_workflow_execution_logs l
+LEFT JOIN postpaid_workflow_versions v ON l.version_id = v.workflow_version_pk
 WHERE l.version_id IS NOT NULL AND v.workflow_version_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_execution_log_details without parent execution_log', COUNT(*)
-FROM workflow_execution_log_details d
-LEFT JOIN workflow_execution_logs l ON d.log_id = l.execution_log_pk
+SELECT 'postpaid_workflow_execution_log_details without parent execution_log', COUNT(*)
+FROM postpaid_workflow_execution_log_details d
+LEFT JOIN postpaid_workflow_execution_logs l ON d.log_id = l.execution_log_pk
 WHERE l.execution_log_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_bucket_executions without parent execution_log', COUNT(*)
-FROM workflow_bucket_executions be
-LEFT JOIN workflow_execution_logs l ON be.execution_log_id = l.execution_log_pk
+SELECT 'postpaid_workflow_bucket_executions without parent execution_log', COUNT(*)
+FROM postpaid_workflow_bucket_executions be
+LEFT JOIN postpaid_workflow_execution_logs l ON be.execution_log_id = l.execution_log_pk
 WHERE l.execution_log_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_bucket_executions without workflow_instance', COUNT(*)
-FROM workflow_bucket_executions be
-LEFT JOIN workflow_instances i ON be.instance_id = i.workflow_instance_pk
+SELECT 'postpaid_workflow_bucket_executions without workflow_instance', COUNT(*)
+FROM postpaid_workflow_bucket_executions be
+LEFT JOIN postpaid_workflow_instances i ON be.instance_id = i.workflow_instance_pk
 WHERE be.instance_id IS NOT NULL AND i.workflow_instance_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_context_fields without context_schema', COUNT(*)
-FROM workflow_context_fields f
-LEFT JOIN workflow_context_schemas s ON f.schema_id = s.context_schema_pk
+SELECT 'postpaid_workflow_context_fields without context_schema', COUNT(*)
+FROM postpaid_workflow_context_fields f
+LEFT JOIN postpaid_workflow_context_schemas s ON f.schema_id = s.context_schema_pk
 WHERE s.context_schema_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_context_fields without integration_registry', COUNT(*)
-FROM workflow_context_fields f
-LEFT JOIN workflow_integration_registry r ON f.integration_id = r.integration_pk
+SELECT 'postpaid_workflow_context_fields without integration_registry', COUNT(*)
+FROM postpaid_workflow_context_fields f
+LEFT JOIN postpaid_workflow_integration_registry r ON f.integration_id = r.integration_pk
 WHERE f.integration_id IS NOT NULL AND r.integration_pk IS NULL
 
 UNION ALL
 
-SELECT 'workflow_revert_status without POSTPAID_ONBOARD_CAF', COUNT(*)
-FROM workflow_revert_status r
+SELECT 'postpaid_workflow_revert_status without POSTPAID_ONBOARD_CAF', COUNT(*)
+FROM postpaid_workflow_revert_status r
 LEFT JOIN POSTPAID_ONBOARD_CAF c ON r.form_id = c.caf_id
 WHERE r.form_id IS NOT NULL AND c.caf_id IS NULL;
 
@@ -156,7 +155,7 @@ FROM user_constraints c
 JOIN user_cons_columns cc 
     ON c.constraint_name = cc.constraint_name
 WHERE c.constraint_type = 'R'
-  AND (c.table_name LIKE 'WORKFLOW_%' OR c.table_name = 'POSTPAID_ONBOARD_CAF')
+  AND c.table_name LIKE 'POSTPAID_%'
   AND NOT EXISTS (
       SELECT 1 
       FROM user_ind_columns ic

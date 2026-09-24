@@ -15,11 +15,11 @@ Atlas separates top-level workflow catalog declarations from their specific vers
 
 ```mermaid
 erDiagram
-    workflow_definitions ||--o{ workflow_versions : "has 1..N versions"
-    workflow_versions ||--o{ workflow_instances : "pins execution"
-    workflow_versions ||--o{ workflow_execution_logs : "records audit trace"
+    postpaid_workflow_definitions ||--o{ postpaid_workflow_versions : "has 1..N versions"
+    postpaid_workflow_versions ||--o{ postpaid_workflow_instances : "pins execution"
+    postpaid_workflow_versions ||--o{ postpaid_workflow_execution_logs : "records audit trace"
 
-    workflow_definitions {
+    postpaid_workflow_definitions {
         varchar(36) workflow_definition_pk PK
         varchar(100) wf_key UK "Unique logical workflow key"
         varchar(255) name
@@ -30,7 +30,7 @@ erDiagram
         timestamp updated_at
     }
 
-    workflow_versions {
+    postpaid_workflow_versions {
         varchar(36) workflow_version_pk PK
         varchar(36) workflow_definition_id FK
         int version "Sequential version number (1, 2, 3...)"
@@ -43,7 +43,7 @@ erDiagram
         timestamp updated_at
     }
 
-    workflow_instances {
+    postpaid_workflow_instances {
         varchar(36) workflow_instance_pk PK
         varchar(100) workflow_key
         varchar(36) version_id FK "Pinned version UUID"
@@ -101,7 +101,7 @@ stateDiagram-v2
 | **`DRAFT`** | **Mutable** | `REVIEW`, (Hard Delete) | Canvas graph can be updated. Cannot be executed in production. |
 | **`REVIEW`** | **Immutable** | `APPROVED`, `DRAFT` | Executes `validateWorkflowGraph()`: verifies all wait events match registered Kafka schemas, command configurations, and bucket outcomes. |
 | **`APPROVED`** | **Immutable** | `PUBLISHED`, `DRAFT` | Staged for production rollout. |
-| **`PUBLISHED`** | **Immutable** | `ARCHIVED` | Updates `workflow_definitions.active_version`. Pre-warms AOT SpEL bytecode and $O(1)$ adjacency graph cache in Caffeine L1 cache. |
+| **`PUBLISHED`** | **Immutable** | `ARCHIVED` | Updates `postpaid_workflow_definitions.active_version`. Pre-warms AOT SpEL bytecode and $O(1)$ adjacency graph cache in Caffeine L1 cache. |
 | **`ARCHIVED`** | **Immutable** | None | Retained for auditability of historical and long-running instances. |
 
 > [!IMPORTANT]
@@ -133,7 +133,7 @@ sequenceDiagram
     Service->>Repo: findByWorkflowDefinitionIdAndVersion(defId, 2)
     Repo-->>Service: Latest Version 2 Snapshot
     Service->>Service: cloneGraph(v2.definition)
-    Service->>DB: INSERT INTO workflow_versions (v3, 'DRAFT', cloned_graph)
+    Service->>DB: INSERT INTO postpaid_workflow_versions (v3, 'DRAFT', cloned_graph)
     Service-->>Author: WorkflowVersionDto (v3, DRAFT)
 ```
 
@@ -163,7 +163,7 @@ sequenceDiagram
 
     Note over Client, DB: Step 2: Version 2 is Published by Workflow Author
     Client->>Engine: Transition v2 to PUBLISHED
-    Engine->>DB: UPDATE workflow_definitions SET active_version = 2
+    Engine->>DB: UPDATE postpaid_workflow_definitions SET active_version = 2
 
     Note over Client, DB: Step 3: New Execution starts on Version 2
     Client->>Engine: POST /api/workflows/POSTPAID_EKYC/execute

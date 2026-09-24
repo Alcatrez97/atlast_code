@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Referenced by BUCKET nodes via the bucketId business key.
  */
 @Entity
-@Table(name = "workflow_buckets", indexes = {
+@Table(name = "postpaid_workflow_buckets", indexes = {
     @Index(name = "idx_bucket_id", columnList = "bucket_id", unique = true),
     @Index(name = "idx_bucket_priority", columnList = "priority"),
     @Index(name = "idx_bucket_active", columnList = "active")
