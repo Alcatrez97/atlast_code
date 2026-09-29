@@ -1,84 +1,228 @@
 # Technical Low-Level Design (LLD): Atlas State Machine & Workflow Engine
 
-This Low-Level Design (LLD) document provides technical specifications, end-to-end execution flows, entity DDL schemas, class contracts, execution algorithms, integration patterns, error handling strategies, and REST API contracts for building the **Atlas State Machine & Workflow Engine**.
+This Low-Level Design (LLD) document provides technical specifications, multi-zoom-level execution flows, entity DDL schemas, class contracts, execution algorithms, integration patterns, error handling strategies, and REST API contracts for building the **Atlas State Machine & Workflow Engine**.
 
 ---
 
-## 1. End-to-End Workflow Flow: CAF Journey to Order Creation
+## 1. End-to-End Workflow Flow: CAF Journey & Document Dependency Resolution
 
-To understand how the workflow engine operates in practice, consider a telecom **Customer Acquisition Form (CAF)** activation journey. The journey starts with a customer submitting a CAF, moves through manual verification queues (buckets), integrates with external telecom systems, triggers an automated **Order Creation** command, and completes.
+To understand how the workflow engine operates in practice, consider a telecom **Customer Acquisition Form (CAF)** activation journey. The journey handles CAF submission, out-of-order document upload staging, dependency resolution between metadata and biometric documents, human review queues (buckets), external system integration, and automated **Order Creation**.
 
-### 1.1 End-to-End Sequence Diagram
+---
+
+### 1.1 Zoom Level 1: Macro Sequence Diagram (High-Level 30,000 ft View)
+
+This macro diagram shows the high-level operational milestones across major system boundaries without overwhelming low-level code mechanics.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Customer as Customer / POS Portal
+    participant API as CAF Ingestion API
+    participant Engine as Atlas Workflow Engine
+    participant Ops as Ops & Document AI
+    participant OMS as Order Management System (OMS)
+
+    Customer->>API: 1. Submit CAF Form (caf_number="CAF-2026-9901")
+    API->>Engine: 2. Initialize Workflow Instance (businessKey="CAF-2026-9901")
+    
+    note over Engine: Workflow starts & evaluates initial rules
+    
+    par Parallel Document & Metadata Dependency
+        Customer->>API: 3A. Upload Passport / Aadhar Scan (DOCUMENTS_RECEIVED)
+        API->>Engine: Stage Document Payload under "CAF-2026-9901"
+    and Human Verification Queue
+        Engine->>Ops: 3B. Enqueue Task in MANUAL_KYC_BUCKET
+        Ops-->>Engine: 4. Ops Agent Approves Document ("APPROVED")
+    end
+
+    note over Engine: 5. Dependency Resolved & JOIN Gate Unlocks
+
+    Engine->>OMS: 6. Trigger Order Creation API (POST /orders)
+    OMS-->>Engine: 7. Order Created (orderId="ORD-883901")
+    Engine-->>Customer: 8. Journey Complete (Status: COMPLETED, Order ID: ORD-883901)
+```
+
+---
+
+### 1.2 Zoom Level 2: Micro Phase-by-Phase Technical Sequence Diagrams
+
+To provide 1-to-1 clarity for developers, the end-to-end execution flow is broken down into four detailed technical phases:
+
+---
+
+#### Phase 2A: CAF Initiation & Out-of-Order Document Staging
+
+In telecom journeys, document uploads (e.g. document scanner scans) frequently arrive asynchronously *before* or *during* the main CAF submission API call. The engine handles this using `StagedPayload` and `CafJourneyIngestionService`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Document Scanner / POS
     participant API as CafJourneyIngestionController
+    participant Stage as StagedPayloadRepository
+    participant InstRepo as WorkflowInstanceRepository
+    participant Engine as GraphTraversalEngine
+    participant DB as Database
+
+    %% Async Document Arrival
+    Client->>API: POST /api/caf/ingest (eventType="DOCUMENTS_RECEIVED", caf_number="CAF-2026-9901")
+    API->>InstRepo: findByBusinessKey("CAF-2026-9901")
+    InstRepo-->>API: Returns empty (Instance not created yet)
+    
+    API->>Stage: INSERT INTO workflow_staged_payloads (business_key='CAF-2026-9901', payload_json)
+    API-->>Client: HTTP 202 Staged
+
+    %% Main CAF Journey Ingestion
+    Client->>API: POST /api/workflows/caf-journey/execute (caf_number="CAF-2026-9901")
+    API->>InstRepo: findByBusinessKey("CAF-2026-9901")
+    API->>Stage: findByBusinessKeyAndStatus("CAF-2026-9901", "STAGED")
+    Stage-->>API: Returns Staged Document Payload
+    
+    API->>Engine: startWorkflow(key="caf-journey", businessKey="CAF-2026-9901", context=mergedPayload)
+    Engine->>DB: INSERT INTO workflow_instances (business_key='CAF-2026-9901', status='RUNNING')
+    Engine->>Stage: UPDATE workflow_staged_payloads SET status='CONSUMED'
+```
+
+---
+
+#### Phase 2B: Parallel Dependency Branching & Bucket Suspension
+
+Once initialized, the workflow evaluates business rules and forks into parallel branches requiring both **Document Received verification** (`MANUAL_KYC_BUCKET`) and **Metadata Validation**.
+
+```mermaid
+sequenceDiagram
+    autonumber
     participant Engine as GraphTraversalEngine
     participant SpEL as SpelEvaluator
     participant Bucket as BucketExecutionService
+    participant SubRepo as EventSubscriptionRepository
     participant Kafka as Kafka Broker (workflow-bucket-tasks)
-    actor Ops as Operations / Manager
+    participant DB as Database
+
+    Engine->>SpEL: evaluate(#context['idType'] == 'PASSPORT')
+    SpEL-->>Engine: Returns true (Passport requires manual KYC verification)
+    
+    note over Engine: Engine encounters PARALLEL split node -> Spawns Branch A & Branch B
+
+    %% Branch A: Human Review Bucket Enqueue
+    Engine->>Bucket: execute(MANUAL_KYC_BUCKET)
+    Bucket->>DB: INSERT INTO workflow_bucket_executions (bucket_id='MANUAL_KYC_BUCKET', status='PENDING')
+    Bucket->>SubRepo: INSERT INTO workflow_event_subscriptions (event_type='MANUAL_KYC_COMPLETED', status='ACTIVE')
+    Bucket->>Kafka: Publish BucketReadyEvent (topic: workflow-bucket-tasks)
+    
+    %% Virtual Thread Suspension
+    Engine->>DB: UPDATE workflow_instances SET status='WAITING', runtime_graph=activeTokens
+    Engine-->>Engine: Virtual Thread Releases (Non-blocking DB & CPU)
+```
+
+---
+
+#### Phase 2C: Async Event Correlation, Dependency Resolution & Resumption
+
+When the Ops agent reviews the document scan or when an external Document AI completes processing, an asynchronous event is fired matching `businessKey = "CAF-2026-9901"`. `EventRoutingService` correlates the event, updates statuses, resolves dependencies, and unlocks the `JOIN` gate.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Ops as Operations Agent / Document AI
     participant Router as EventRoutingService
+    participant SubRepo as EventSubscriptionRepository
+    participant BExecRepo as BucketExecutionRepository
+    participant InstRepo as WorkflowInstanceRepository
+    participant Engine as ActivationBasedEngine
+    participant DB as Database
+
+    Ops->>Router: POST /api/v1/buckets/executions/{id}/resolve (resolution="APPROVED", caf_number="CAF-2026-9901")
+    
+    Router->>SubRepo: findByBusinessKeyAndEventType("CAF-2026-9901", "MANUAL_KYC_COMPLETED")
+    SubRepo-->>Router: Returns Active EventSubscription (targetNodeId="node-kyc-bucket")
+    
+    Router->>SubRepo: UPDATE workflow_event_subscriptions SET status='TRIGGERED'
+    Router->>BExecRepo: UPDATE workflow_bucket_executions SET status='RESOLVED', resolution='APPROVED'
+    Router->>InstRepo: UPDATE workflow_instances SET status='RUNNING'
+    
+    Router->>Engine: resume(instanceId, targetNodeId="node-kyc-bucket", payload={kycOutcome: "APPROVED"})
+    
+    Engine->>Engine: Resume token traversal -> Token reaches JOIN node
+    Engine->>Engine: Check incoming parallel edges -> All parallel branches (CAF metadata & KYC scan) completed!
+    note over Engine: Dependency Resolved! JOIN Gate Unlocks and advances downstream.
+```
+
+---
+
+#### Phase 2D: External System Integration & Order Creation Command Execution
+
+With dependencies resolved, the engine executes external REST integrations (fetching Age on Network from UPSS) and triggers automated **Order Creation** in the Order Management System (OMS).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Engine as GraphTraversalEngine
     participant Reg as IntegrationRegistry
+    participant SpEL as SpelEvaluator
     participant ExtUPSS as UPSS System (Age on Network)
     participant ExtOMS as OMS System (Order Creation)
     participant DB as Relational Database
 
-    %% Step 1: Initiation
-    Customer->>API: POST /api/workflows/caf-journey/execute (caf_number="CAF-2026-9901")
-    API->>Engine: execute(workflowKey="caf-journey", businessKey="CAF-2026-9901")
-    Engine->>DB: INSERT INTO workflow_instances (business_key='CAF-2026-9901', status='RUNNING')
-    
-    %% Step 2: Rule Node Evaluation
-    Engine->>SpEL: evaluate(#context['idType'] == 'PASSPORT')
-    SpEL-->>Engine: Returns true (Requires Manual KYC Review)
-    
-    %% Step 3: Bucket Suspension (KYC Review)
-    Engine->>Bucket: Enqueue Bucket ("MANUAL_KYC_BUCKET")
-    Bucket->>DB: INSERT INTO workflow_bucket_executions (status='PENDING')
-    Bucket->>DB: INSERT INTO workflow_event_subscriptions (event_type='MANUAL_KYC_COMPLETED')
-    Engine->>DB: UPDATE workflow_instances SET status='WAITING'
-    Bucket->>Kafka: Publish BucketReadyEvent (topic: workflow-bucket-tasks)
-    Engine-->>Engine: Virtual Thread Releases (Non-blocking)
-
-    %% Step 4: Human Bucket Resolution
-    Note over Ops: Ops agent reviews passport photo in Ops Portal
-    Ops->>Router: POST /api/v1/buckets/executions/{id}/resolve {outcome: "APPROVED"}
-    Router->>DB: UPDATE workflow_bucket_executions SET status='RESOLVED'
-    Router->>DB: UPDATE workflow_event_subscriptions SET status='TRIGGERED'
-    Router->>DB: UPDATE workflow_instances SET status='RUNNING'
-    Router->>Engine: resume(instanceId, payload={bucketOutcome: "APPROVED"})
-
-    %% Step 5: External Integration - UPSS Age on Network
-    Engine->>Reg: Lookup "UPSS_AGE_ON_NETWORK_API"
+    %% External Call 1: UPSS Age on Network
+    Engine->>Reg: findByIntegrationKey("UPSS_AGE_ON_NETWORK_API")
     Reg-->>Engine: Returns endpoint https://upss.internal/api/v1/subscribers/9876543210
-    Engine->>ExtUPSS: GET /subscribers/9876543210/profile
+    Engine->>ExtUPSS: GET /api/v1/subscribers/9876543210/profile
     ExtUPSS-->>Engine: HTTP 200 OK { ageOnNetworkDays: 450, status: "ACTIVE" }
     Engine->>Engine: Context updated (#context['ageOnNetworkDays'] = 450)
 
-    %% Step 6: Decision Branch & Order Creation Command
+    %% Decision Edge Evaluation
     Engine->>SpEL: evaluate(#context['ageOnNetworkDays'] >= 90)
-    SpEL-->>Engine: Returns true (Eligible for instant order creation)
-    Engine->>Reg: Lookup "OMS_ORDER_CREATE_API"
+    SpEL-->>Engine: Returns true (Eligible for automated order creation)
+
+    %% External Call 2: OMS Order Creation Command
+    Engine->>Reg: findByIntegrationKey("OMS_ORDER_CREATE_API")
     Reg-->>Engine: Returns endpoint https://oms.internal/api/v1/orders (POST)
     Engine->>ExtOMS: POST /orders { cafNumber: "CAF-2026-9901", msisdn: "9876543210" }
     ExtOMS-->>Engine: HTTP 201 Created { orderId: "ORD-883901" }
     Engine->>Engine: Context updated (#context['orderId'] = "ORD-883901")
 
-    %% Step 7: Completion
+    %% Completion
     Engine->>DB: UPDATE workflow_instances SET status='COMPLETED'
-    Engine-->>Customer: Journey Finished (Status: COMPLETED, Order ID: ORD-883901)
+    note over Engine: Workflow Journey Reaches END Node (Status: COMPLETED)
 ```
 
 ---
 
-### 1.2 Role Breakdown of Engine Components Used in the Flow
+### 1.3 Step-by-Step Narrative: CAF & Document Dependency Journey
+
+1. **Out-of-Order Document Staging (`Phase 2A`)**:
+   - A customer scans their passport at a POS kiosk. The Document Scanner posts `DOCUMENTS_RECEIVED` payload with `caf_number = "CAF-2026-9901"`.
+   - Because the main CAF submission API has not executed yet, `CafJourneyIngestionService` stages the payload in `workflow_staged_payloads`.
+   - Minutes later, the customer submits the CAF form via the web portal. The engine reads the staged document payload, initializes `WorkflowInstance`, and sets status to `RUNNING`.
+
+2. **Parallel Dependency Branching & Suspension (`Phase 2B`)**:
+   - Node `rule-verify-id` evaluates `#context['idType'] == 'PASSPORT'` via `SpelEvaluator`. Since passport verification requires manual biometric check, execution forks at a `PARALLEL` split into two branches:
+     - **Branch A**: Enqueues `MANUAL_KYC_BUCKET` in `workflow_bucket_executions` and registers an active event subscription (`event_type = 'MANUAL_KYC_COMPLETED'`).
+     - **Branch B**: Validates customer metadata and plan entitlement.
+   - The instance enters `WAITING` status, releasing the Virtual Thread without blocking OS CPU resources.
+
+3. **Dependency Resolution & Resumption (`Phase 2C`)**:
+   - An Operations agent inspects the passport scan on the Ops Portal and clicks **Approve**.
+   - The portal sends `POST /api/v1/buckets/executions/{id}/resolve` with `{ "resolution": "APPROVED" }`.
+   - `EventRoutingService` matches `business_key = "CAF-2026-9901"`, marks the `EventSubscription` as `TRIGGERED`, updates bucket execution to `RESOLVED`, and resumes `ActivationBasedEngine`.
+   - Token A advances to the `JOIN` node and verifies that Branch B (metadata validation) has also completed. Both dependencies are satisfied—the `JOIN` gate unlocks!
+
+4. **External Call & Order Creation (`Phase 2D`)**:
+   - The engine calls UPSS (`UPSS_AGE_ON_NETWORK_API`) via `IntegrationRegistry` to fetch subscriber age on network (450 days).
+   - Node `dec-check-eligibility` evaluates `#context['ageOnNetworkDays'] >= 90` to `true`.
+   - Node `cmd-trigger-order-create` dispatches a REST `POST` request to OMS (`OMS_ORDER_CREATE_API`) with `X-Idempotency-Key: CAF-2026-9901`.
+   - OMS returns `orderId = "ORD-883901"`. Context is updated, and the workflow terminates cleanly at the `END` node with status `COMPLETED`.
+
+---
+
+### 1.4 Role Breakdown of Engine Components Used in the Flow
 
 | Component Name | Primary Role in the Journey | Key Database Table / Class |
 | :--- | :--- | :--- |
-| **`CafJourneyIngestionController`** | Entry point receiving the initial REST API submission containing `caf_number`. | Controller Class |
+| **`CafJourneyIngestionController`** | Entry point receiving initial REST API submissions and out-of-order document uploads. | Controller Class |
+| **`StagedPayloadRepository`** | Stores out-of-order document uploads staged under `business_key` prior to workflow initialization. | `workflow_staged_payloads` |
 | **`WorkflowInstance`** | Stores runtime execution state, context variables (`#context`), and active node pointers. | `workflow_instances` |
 | **`GraphTraversalEngine`** | Main execution orchestrator managing graph walking and node transitions. | `GraphTraversalEngine.java` |
 | **`ActivationBasedEngine`** | Token propagation engine managing branch execution and parallel/join nodes. | `ActivationBasedEngine.java` |
@@ -169,7 +313,20 @@ CREATE TABLE workflow_integration_registry (
     CONSTRAINT uk_wf_int_key UNIQUE (integration_key)
 );
 
--- 5. Step-Level Audit Ledger
+-- 5. Out-of-Order Staged Payloads Table
+CREATE TABLE workflow_staged_payloads (
+    staged_payload_pk VARCHAR2(36) NOT NULL,
+    business_key VARCHAR2(100) NOT NULL, -- e.g. CAF-2026-9901
+    event_type VARCHAR2(100) NOT NULL,   -- e.g. DOCUMENTS_RECEIVED
+    status VARCHAR2(30) DEFAULT 'STAGED' NOT NULL, -- STAGED, CONSUMED, EXPIRED
+    payload_json CLOB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT pk_wf_staged PRIMARY KEY (staged_payload_pk)
+);
+CREATE INDEX idx_staged_lookup ON workflow_staged_payloads(business_key, status);
+
+-- 6. Step-Level Audit Ledger
 CREATE TABLE workflow_task_instances (
     task_instance_pk VARCHAR2(255) NOT NULL, -- {instance_id}_{nodeId}_{counter}
     instance_id VARCHAR2(36) NOT NULL,
@@ -185,7 +342,7 @@ CREATE TABLE workflow_task_instances (
         REFERENCES workflow_instances(workflow_instance_pk) ON DELETE CASCADE
 );
 
--- 6. Event Correlation Subscriptions
+-- 7. Event Correlation Subscriptions
 CREATE TABLE workflow_event_subscriptions (
     event_subscription_pk VARCHAR2(36) NOT NULL,
     instance_id VARCHAR2(36) NOT NULL,
@@ -201,7 +358,7 @@ CREATE TABLE workflow_event_subscriptions (
 );
 CREATE INDEX idx_evt_sub_lookup ON workflow_event_subscriptions(business_key, event_type, status);
 
--- 7. Human Task Queues (Buckets)
+-- 8. Human Task Queues (Buckets)
 CREATE TABLE workflow_buckets (
     bucket_id VARCHAR2(50) NOT NULL,
     name VARCHAR2(150) NOT NULL,
@@ -232,7 +389,7 @@ CREATE TABLE workflow_bucket_executions (
         REFERENCES workflow_buckets(bucket_id)
 );
 
--- 8. Execution Telemetry Logs (Vertically Partitioned 1-to-1)
+-- 9. Execution Telemetry Logs (Vertically Partitioned 1-to-1)
 CREATE TABLE workflow_execution_logs (
     execution_log_pk VARCHAR2(36) NOT NULL,
     workflow_key VARCHAR2(100) NOT NULL,
@@ -365,27 +522,11 @@ flowchart TD
     G -->|No| I[Mark Instance Status = FAILED & Stop Traversal]
 ```
 
-### 8.1 HTTP Command Retry & Timeout Rules
-- **Default Timeout**: 5000ms (configurable per integration in `workflow_integration_registry`).
-- **Retry Backoff**: `@Retryable(maxAttempts = 3, backoff = @Backoff(delay = 200, multiplier = 1.5))`.
-- **Fallback Edge Routing**: When a command fails after retries, the node populates `#context['error'] = 'SERVICE_UNAVAILABLE'`. If the node connects to an edge conditioned on `#context['error'] != null`, the engine routes execution to a manual fallback bucket rather than failing the workflow.
-
-### 8.2 Kafka Event Consumer Dead Letter Queue (DLQ) Strategy
-- Inbound event consumer topic: `workflow-events`.
-- Retry Policy: 3 retry attempts with 1000ms backoff.
-- **DLQ Recovery**: Unparseable or continuously failing events are published to `workflow-events-dlq` along with error diagnostics (`X-Exception-Message`, `X-Original-Topic`) for developer inspection.
-
 ---
 
 ## 9. Optimistic Concurrency Control & Self-Healing Retries
 
 In high-throughput environments, multiple external callbacks or ops bucket resolutions may arrive simultaneously for the same `business_key`.
-
-### 9.1 JPA Optimistic Locking (`opt_lock_version`)
-All updates to `workflow_instances` evaluate the JPA `@Version` column (`opt_lock_version`). If Transaction A updates the instance context while Transaction B is committing, Transaction B receives an `OptimisticLockException`.
-
-### 9.2 Self-Healing AOP Retry Handler
-To prevent transient optimistic lock failures from returning errors to callers, `ExecutionService` and `EventRoutingService` wrap state updates in self-healing Spring retries:
 
 ```java
 @Service
@@ -398,9 +539,7 @@ public class ExecutionService {
     )
     @Transactional
     public ExecutionLogDto resume(String instanceId, Map<String, Object> additionalContext) {
-        // Automatically re-loads latest database state on lock collision and re-executes traversal
         WorkflowInstance instance = instanceRepository.findById(instanceId).orElseThrow();
-        // Merge context & run traversal
         return processResume(instance, additionalContext);
     }
 }
@@ -425,7 +564,6 @@ public class GraphTraversalEngine {
                 state.markFailed("INFINITE_LOOP_DETECTED: Exceeded maximum permitted step count of 200");
                 return new TraversalResult(state.getTrace(), false, null, null, null, runtimeGraph);
             }
-            // Continue normal node execution...
         }
     }
 }
@@ -436,28 +574,6 @@ public class GraphTraversalEngine {
 ## 11. Data Dictionary & Context Schema Validation
 
 To guarantee type safety across workflow steps, `workflow_context_schemas` and `workflow_context_fields` define data constraints for workflow variables.
-
-### 1. Supported Data Types
-- `STRING`, `NUMBER`, `BOOLEAN`, `DATE`, `OBJECT`.
-
-### 2. Validation Execution at `START` Node
-When a workflow starts, `StartNodeExecutor` evaluates incoming payload parameters against the context schema:
-
-```java
-public class ContextSchemaValidator {
-    public void validate(Map<String, Object> inputContext, ContextSchema schema) {
-        for (ContextField field : schema.getFields()) {
-            if (field.getRequired() && !inputContext.containsKey(field.getFieldName())) {
-                throw new IllegalArgumentException("Missing required context field: " + field.getFieldName());
-            }
-            if (inputContext.containsKey(field.getFieldName())) {
-                Object value = inputContext.get(field.getFieldName());
-                validateType(field.getFieldName(), value, field.getFieldType());
-            }
-        }
-    }
-}
-```
 
 ---
 
@@ -511,73 +627,10 @@ public class ContextSchemaValidator {
 
 ---
 
-### 12.2 Human Bucket Workload APIs
-
-#### 1. List Bucket Workload Queue
-- **Endpoint**: `GET /api/v1/buckets/executions?bucketId=MANUAL_KYC_BUCKET&status=PENDING`
-- **Response `200 OK`**:
-```json
-{
-  "content": [
-    {
-      "bucketExecutionPk": "bexec-9901",
-      "instanceId": "inst-884012",
-      "bucketId": "MANUAL_KYC_BUCKET",
-      "status": "PENDING",
-      "createdAt": "2026-09-28T14:30:00Z"
-    }
-  ],
-  "totalElements": 1
-}
-```
-
-#### 2. Resolve Bucket Workload Task
-- **Endpoint**: `POST /api/v1/buckets/executions/{id}/resolve`
-- **Request Body**:
-```json
-{
-  "resolution": "APPROVED",
-  "resolutionNotes": "Approved by Ops Lead",
-  "resolvedBy": "OP_AGENT_44"
-}
-```
-- **Response `200 OK`**:
-```json
-{
-  "status": "RESOLVED",
-  "bucketExecutionPk": "bexec-9901",
-  "resolvedAt": "2026-09-28T14:35:12Z"
-}
-```
-
----
-
-### 12.3 Audit & Step History APIs
-
-#### 1. Get Instance Task Audit Steps
-- **Endpoint**: `GET /api/instances/{id}/tasks`
-- **Response `200 OK`**:
-```json
-[
-  {
-    "id": "inst-884012_start-node_1",
-    "taskType": "START",
-    "label": "Start Journey",
-    "status": "COMPLETED",
-    "inputData": "{ \"businessKey\": \"CAF-9901\" }",
-    "outputData": "{ \"status\": \"INITIALIZED\" }",
-    "startedAt": "2026-09-28T14:30:00Z",
-    "completedAt": "2026-09-28T14:30:00Z"
-  }
-]
-```
-
----
-
 ## 13. Summary & Developer Checklist
 
 When implementing this engine, ensure the following core layers are verified:
-1. **Schema Migrations**: Database DDLs for all 8 `workflow_*` tables with `@Version` lock columns.
+1. **Schema Migrations**: Database DDLs for all 9 `workflow_*` tables with `@Version` lock columns.
 2. **Graph Compilation**: Ahead-of-Time SpEL compilation (`SpelCompilerMode.IMMEDIATE`) in Caffeine L1 cache.
 3. **Execution Engine**: Virtual Thread dispatching with token propagation (`ActivationBasedEngine`).
 4. **Bucket Management**: Workload queue transitions (`PENDING` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `RESOLVED`), parallel bucket JOIN convergence, and inactive bucket auto-bypass.
