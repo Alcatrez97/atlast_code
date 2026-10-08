@@ -28,6 +28,9 @@ public class KafkaEventListener {
     @Autowired
     private BucketResolutionService bucketResolutionService;
 
+    @Autowired
+    private com.vi.atlas.workflow.repository.WorkflowInstanceRepository workflowInstanceRepository;
+
     /**
      * Listen to 'caf-lifecycle' topic to start a new workflow execution.
      */
@@ -86,23 +89,36 @@ public class KafkaEventListener {
         } else {
             event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(payload, BucketResolutionEvent.class);
         }
-        log.info("Received BucketResolutionEvent: instanceId={}, bucketId={}, outcome={}",
-                event.getInstanceId(), event.getBucketId(), event.getOutcome());
+        log.info("Received BucketResolutionEvent: instanceId={}, businessKey={}, bucketId={}, outcome={}",
+                event.getInstanceId(), event.getBusinessKey(), event.getBucketId(), event.getOutcome());
         
         try {
             // Trust the Identity Header if provided (Identity Propagation over Kafka)
             String resolvedBy = (userId != null && !userId.isBlank()) ? userId : event.getResolvedBy();
             
+            String instanceId = event.getInstanceId();
+            if (instanceId == null || instanceId.isBlank()) {
+                String key = event.getBusinessKey() != null ? event.getBusinessKey() : event.getCafId();
+                if (key != null && !key.isBlank()) {
+                    instanceId = workflowInstanceRepository.findFirstByBusinessKeyOrderByCreatedAtDesc(key)
+                            .map(com.vi.atlas.workflow.entity.WorkflowInstance::getId)
+                            .orElse(null);
+                }
+            }
+            if (instanceId == null || instanceId.isBlank()) {
+                throw new IllegalArgumentException("Cannot resolve bucket without valid instanceId or businessKey/cafId. Provided key: " + event.getBusinessKey());
+            }
+
             bucketResolutionService.resolveBucket(
-                    event.getInstanceId(),
+                    instanceId,
                     event.getBucketId(),
                     event.getOutcome(),
                     resolvedBy,
                     event.getResolutionNotes()
             );
-            log.info("Successfully routed bucket resolution for instanceId={}", event.getInstanceId());
+            log.info("Successfully routed bucket resolution for instanceId={} (businessKey={})", instanceId, event.getBusinessKey());
         } catch (Exception e) {
-            log.error("Failed to process bucket resolution for instance {}: {}", event.getInstanceId(), e.getMessage(), e);
+            log.error("Failed to process bucket resolution for event: {}", event, e);
             throw e; // Delegate to Kafka error handler / DLQ
         }
     }

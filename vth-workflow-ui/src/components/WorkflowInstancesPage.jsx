@@ -407,15 +407,32 @@ export const WorkflowInstancesPage = ({ onShowNotification }) => {
 
                   {/* Action Column */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }} onClick={(e) => e.stopPropagation()}>
-                    {isWaiting && (<Button variant="contained" size="small" startIcon={<PlayArrowIcon />} onClick={(e) => handleOpenResume(inst, e)} sx={{
-                      background: `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
-                      fontWeight: 700,
-                      px: 2, py: 0.75,
-                      fontSize: '11px',
-                      boxShadow: `0 4px 10px rgba(99,102,241,0.2)`
-                    }}>
-                      Resume Instance
-                    </Button>)}
+                    {isWaiting && (() => {
+                      const isBucket = inst.currentNodeId?.toLowerCase().includes('bucket') ||
+                                       inst.currentNodeLabel?.toLowerCase().includes('bucket');
+                      return (
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={isBucket ? <CheckCircleIcon sx={{ fontSize: '14px' }} /> : <PlayArrowIcon />}
+                          onClick={(e) => handleOpenResume(inst, e)}
+                          sx={{
+                            background: isBucket
+                              ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                              : `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
+                            fontWeight: 700,
+                            px: 2,
+                            py: 0.75,
+                            fontSize: '11px',
+                            boxShadow: isBucket
+                              ? '0 4px 10px rgba(245,158,11,0.25)'
+                              : '0 4px 10px rgba(99,102,241,0.2)'
+                          }}
+                        >
+                          {isBucket ? 'Resolve Bucket' : 'Resume Instance'}
+                        </Button>
+                      );
+                    })()}
                     <Button variant="outlined" size="small" color="error" onClick={(e) => handleDeleteInstance(inst.id, e)} sx={{ borderColor: 'rgba(239, 68, 68, 0.2)', fontSize: '11px', py: 0.75 }}>
                       Delete
                     </Button>

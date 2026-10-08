@@ -6,6 +6,8 @@ public class BucketResolutionEvent implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String instanceId;
+    private String businessKey; // Domain correlation key (e.g. CAF ID)
+    private String cafId;       // Alias for businessKey
     private String bucketId;
     private String outcome; // Accept, Reject, Park
     private String resolvedBy;
@@ -25,6 +27,12 @@ public class BucketResolutionEvent implements Serializable {
 
     public String getInstanceId() { return instanceId; }
     public void setInstanceId(String instanceId) { this.instanceId = instanceId; }
+
+    public String getBusinessKey() { return businessKey != null ? businessKey : cafId; }
+    public void setBusinessKey(String businessKey) { this.businessKey = businessKey; }
+
+    public String getCafId() { return cafId != null ? cafId : businessKey; }
+    public void setCafId(String cafId) { this.cafId = cafId; }
 
     public String getBucketId() { return bucketId; }
     public void setBucketId(String bucketId) { this.bucketId = bucketId; }

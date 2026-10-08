@@ -19,16 +19,21 @@ import {
   Chip,
   Paper,
   Tooltip,
-  Divider
+  Divider,
+  Collapse
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import SendIcon from '@mui/icons-material/Send';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
 export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotification, onSuccess }) => {
   const [activeTab, setActiveTab] = useState(0);
@@ -39,11 +44,17 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
   const [confirmedSafety, setConfirmedSafety] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [resolvedBy, setResolvedBy] = useState('ManualOperator');
+  const [showAdvancedJson, setShowAdvancedJson] = useState(false);
 
   useEffect(() => {
     if (open && instance?.id) {
       setConfirmedSafety(false);
       setAdditionalContextJson('{\n  \n}');
+      setResolutionNotes('');
+      setResolvedBy('ManualOperator');
+      setShowAdvancedJson(false);
       setActiveTab(0);
       fetchMetadata(instance.id);
     }
@@ -79,7 +90,76 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
-  const handleResumeSubmit = async () => {
+  if (!instance) return null;
+
+  // Derive correlation keys & bucket targets
+  const cafId = instance.businessKey || instance.context?.cafId || instance.context?.contextId || instance.context?.cocpId || instance.id;
+  const activeSub = subscriptions.find(s => s.status === 'ACTIVE') || subscriptions[0];
+  const pendingBucket = revertStatusList.find(r => r.status === 'PENDING') || revertStatusList[0];
+  
+  const isBucketNode = Boolean(
+    pendingBucket ||
+    instance.currentNodeId?.toLowerCase().includes('bucket') ||
+    instance.currentNodeLabel?.toLowerCase().includes('bucket')
+  );
+
+  const bucketId = pendingBucket?.bucketId || 
+    (instance.currentNodeId ? instance.currentNodeId.replace(/^(node[-_]|bucket[-_])/i, '') : 'A2');
+  const bucketName = pendingBucket?.bucketName || instance.currentNodeLabel || `Bucket ${bucketId}`;
+  const eventType = activeSub?.eventType || bucketId;
+
+  // Quick Resolve Bucket Action (Accept or Reject)
+  const handleResolveBucketSubmit = async (outcome) => {
+    if (!instance?.id) return;
+    setResuming(true);
+    try {
+      // 1. Try updating via Domain Form API using cafId
+      const targetStatus = `${bucketId}${outcome}`;
+      const res = await fetch(`/api/forms/${cafId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: targetStatus,
+          outcome: outcome,
+          resolvedBy: resolvedBy || 'ManualOperator',
+          notes: resolutionNotes || `Bucket ${bucketId} marked as ${outcome} via Atlas UI Operator`
+        })
+      });
+
+      if (!res.ok) {
+        // 2. Fallback to direct instance resume if form record does not exist
+        const fallbackRes = await fetch(`/api/instances/${instance.id}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            outcome: outcome,
+            lastOutcome: outcome,
+            lastBucketId: bucketId,
+            form_status: targetStatus,
+            [`${bucketId}_outcome`]: outcome,
+            resolvedBy: resolvedBy || 'ManualOperator',
+            notes: resolutionNotes || `Bucket ${bucketId} resolved via UI fallback`
+          })
+        });
+
+        if (!fallbackRes.ok) {
+          const errText = await fallbackRes.text();
+          throw new Error(errText || 'Failed to resolve bucket and resume instance');
+        }
+      }
+
+      onShowNotification?.(`Bucket "${bucketName}" resolved as ${outcome.toUpperCase()}! Workflow resumed.`, 'success');
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      onShowNotification?.(err.message, 'error');
+    } finally {
+      setResuming(false);
+    }
+  };
+
+  // Generic direct resume submit
+  const handleDirectResumeSubmit = async () => {
     if (!instance?.id) return;
     let payload = {};
     try {
@@ -112,30 +192,46 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
     }
   };
 
-  if (!instance) return null;
+  // Code snippets for external resolution
+  const restAcceptCurl = `curl -X PUT "http://localhost:9091/api/forms/${cafId}/status" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "status": "${bucketId}Accept",
+    "outcome": "Accept",
+    "resolvedBy": "external-approval-portal",
+    "notes": "Verified by external approval system"
+  }'`;
 
-  // Derive correlation keys & event targets
-  const businessKey = instance.businessKey || instance.context?.contextId || instance.context?.cafId || instance.context?.cocpId || instance.id;
-  const activeSub = subscriptions.find(s => s.status === 'ACTIVE') || subscriptions[0];
-  const eventType = activeSub?.eventType || (instance.currentNodeId ? `${instance.currentNodeId.toUpperCase()}_RESUME` : 'WORKFLOW_RESUME');
-  const pendingBucket = revertStatusList.find(r => r.status === 'PENDING') || revertStatusList[0];
+  const restRejectCurl = `curl -X PUT "http://localhost:9091/api/forms/${cafId}/status" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "status": "${bucketId}Reject",
+    "outcome": "Reject",
+    "resolvedBy": "external-approval-portal",
+    "notes": "Rejected by external approval system"
+  }'`;
 
-  // Code snippets
-  const kafkaPayload = JSON.stringify({
-    eventType: eventType,
-    businessKey: businessKey,
-    payload: {
-      status: "APPROVED",
-      resumedBy: "ManualOperator",
-      notes: "Resumed via external event pattern"
-    }
+  const kafkaResolutionPayload = JSON.stringify({
+    cafId: cafId,
+    bucketId: bucketId,
+    outcome: "Accept",
+    resolvedBy: "external-approval-service",
+    resolutionNotes: "Identity and documents approved"
   }, null, 2);
 
-  const kafkaCommand = `# Publish event to Kafka:\nwsl kafka-console-producer.sh --bootstrap-server localhost:9092 --topic workflow-events <<EOF\n${kafkaPayload}\nEOF`;
+  const kafkaResolutionCli = `# Send resolution using only cafId & bucketId (no instanceId needed!):
+wsl kafka-console-producer.sh --bootstrap-server localhost:9092 --topic workflow-bucket-resolution <<EOF
+${kafkaResolutionPayload}
+EOF`;
 
-  const curlCommand = `curl -X POST "http://localhost:9091/api/instances/${instance.id}/resume" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "status": "APPROVED",\n    "resumedBy": "ManualOperator"\n  }'`;
-
-  const bucketCurl = pendingBucket ? `curl -X PUT "http://localhost:9091/api/forms/${businessKey}/status" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "status": "${pendingBucket.bucketId}Accept",\n    "outcome": "Accept",\n    "notes": "Approved via manual operator review"\n  }'` : '';
+  const directEngineCurl = `curl -X POST "http://localhost:9091/api/instances/${instance.id}/resume" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "outcome": "Accept",
+    "lastOutcome": "Accept",
+    "form_status": "${bucketId}Accept",
+    "resolvedBy": "Operator"
+  }'`;
 
   return (
     <Dialog
@@ -159,12 +255,26 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              How to Resume Instance
+              {isBucketNode ? `Resolve Bucket & Resume Workflow` : `How to Resume Instance`}
             </Typography>
             <Chip label="WAITING" size="small" color="warning" sx={{ fontWeight: 700, height: 22, fontSize: '11px' }} />
+            {isBucketNode && (
+              <Chip
+                label={`Bucket: ${bucketId}`}
+                size="small"
+                sx={{
+                  fontWeight: 700,
+                  height: 22,
+                  fontSize: '11px',
+                  bgcolor: 'rgba(99,102,241,0.15)',
+                  color: '#818cf8',
+                  border: '1px solid rgba(99,102,241,0.3)'
+                }}
+              />
+            )}
           </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-            Instance ID: {instance.id} | Workflow: {instance.workflowKey}
+            Workflow: <strong>{instance.workflowKey}</strong> | Instance: {instance.id}
           </Typography>
         </Box>
         <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary' }}>
@@ -173,37 +283,18 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
-        {/* Mitigation Alert & Operator Guard */}
-        <Alert
-          severity="warning"
-          icon={<WarningAmberIcon fontSize="inherit" />}
-          sx={{
-            mb: 2.5,
-            borderRadius: 2,
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            bgcolor: 'rgba(245, 158, 11, 0.08)'
-          }}
-        >
-          <AlertTitle sx={{ fontWeight: 800, fontSize: '13px', mb: 0.5 }}>
-            Safety Mitigation & Operator Guard
-          </AlertTitle>
-          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.5 }}>
-            Resuming an instance manually bypasses external webhooks, Kafka event delivery, and third-party validation.
-            Review downstream node requirements and ensure you have proper authorization before executing a direct override.
-          </Typography>
-        </Alert>
-
-        {/* Current State Diagnostic Tile */}
+        {/* State Diagnostic Tile */}
         <Paper
           variant="outlined"
           sx={{
-            p: 1.5,
+            p: 2,
             mb: 2.5,
             borderRadius: 2,
             bgcolor: 'rgba(255, 255, 255, 0.02)',
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 3,
+            justifyContent: 'space-between',
+            gap: 2,
             fontSize: '12px'
           }}
         >
@@ -215,34 +306,40 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
               {instance.currentNodeLabel || instance.currentNodeId || 'Unknown'}
             </Typography>
           </Box>
+
           <Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
-              CORRELATION KEY (BUSINESS KEY)
+              CAF ID / BUSINESS KEY
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-              {businessKey}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
+                {cafId}
+              </Typography>
+              <Tooltip title="Copy CAF ID">
+                <IconButton size="small" onClick={() => handleCopy(cafId, 'cafIdCopy')} sx={{ p: 0.25 }}>
+                  {copiedKey === 'cafIdCopy' ? <CheckIcon sx={{ fontSize: 14, color: '#34d399' }} /> : <ContentCopyIcon sx={{ fontSize: 14 }} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+              BUCKET KEY
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#a78bfa', fontFamily: 'monospace' }}>
+              {bucketId}
             </Typography>
           </Box>
-          {activeSub && (
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
-                ACTIVE EVENT SUBSCRIPTION
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace' }}>
-                {activeSub.eventType}
-              </Typography>
-            </Box>
-          )}
-          {pendingBucket && (
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
-                PENDING BUCKET
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#6366f1' }}>
-                {pendingBucket.bucketName || pendingBucket.bucketId} ({pendingBucket.bucketId})
-              </Typography>
-            </Box>
-          )}
+
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+              EVENT CORRELATION
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#34d399', fontFamily: 'monospace' }}>
+              {eventType}
+            </Typography>
+          </Box>
         </Paper>
 
         {/* Navigation Tabs */}
@@ -252,196 +349,330 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
           sx={{
             borderBottom: 1,
             borderColor: 'divider',
-            mb: 2,
+            mb: 2.5,
             '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '12px' }
           }}
         >
-          <Tab icon={<PlayArrowIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Direct UI Resume" />
-          <Tab icon={<SendIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Kafka Inbound Event" />
-          <Tab icon={<TerminalIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="cURL Command" />
-          {pendingBucket && (
-            <Tab icon={<AssignmentIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Bucket Form Update" />
-          )}
+          <Tab icon={<PlayArrowIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="One-Click UI Action" />
+          <Tab icon={<TerminalIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="External REST API (cafId)" />
+          <Tab icon={<SendIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Kafka Resolution Topic" />
         </Tabs>
 
-        {/* Tab 0: Direct UI Resume */}
+        {/* Tab 0: Direct UI Action */}
         {activeTab === 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Directly resume this workflow instance using the Engine's Execution Service. Optionally inject variables into the context:
-            </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            {isBucketNode ? (
+              <>
+                <Alert
+                  severity="info"
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: 'rgba(56, 189, 248, 0.08)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)'
+                  }}
+                >
+                  <AlertTitle sx={{ fontWeight: 800, fontSize: '13px' }}>
+                    Human-in-the-Loop Bucket Action Required
+                  </AlertTitle>
+                  <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.5 }}>
+                    This workflow is waiting on bucket <strong>{bucketName} ({bucketId})</strong>. Clicking <strong>Accept</strong> or <strong>Reject</strong> below will immediately update the database form record (<code>POSTPAID_ONBOARD_CAF</code>), complete the audit trail, and resume workflow routing.
+                  </Typography>
+                </Alert>
 
-            <TextField
-              multiline
-              rows={6}
-              fullWidth
-              value={additionalContextJson}
-              onChange={(e) => setAdditionalContextJson(e.target.value)}
-              placeholder="{\n  &quot;approved&quot;: true\n}"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  bgcolor: 'rgba(0, 0, 0, 0.04)'
-                }
-              }}
-            />
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <TextField
+                    size="small"
+                    label="Resolved By"
+                    value={resolvedBy}
+                    onChange={(e) => setResolvedBy(e.target.value)}
+                    sx={{ flex: '1 1 200px' }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Resolution Notes / Remarks"
+                    placeholder="e.g. Identity and address verification passed"
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    sx={{ flex: '2 1 300px' }}
+                  />
+                </Box>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={confirmedSafety}
-                  onChange={(e) => setConfirmedSafety(e.target.checked)}
-                  color="warning"
-                />
-              }
-              label={
-                <Typography variant="caption" sx={{ fontWeight: 700, color: confirmedSafety ? 'text.primary' : 'warning.main' }}>
-                  I confirm that this manual override is authorized and the payload context is verified.
+                <Box sx={{ display: 'flex', gap: 2, pt: 1 }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="large"
+                    disabled={resuming}
+                    startIcon={resuming ? <CircularProgress size={16} color="inherit" /> : <CheckCircleIcon />}
+                    onClick={() => handleResolveBucketSubmit('Accept')}
+                    sx={{
+                      flex: 1,
+                      fontWeight: 800,
+                      py: 1.25,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    Accept Outcome
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="large"
+                    disabled={resuming}
+                    startIcon={resuming ? <CircularProgress size={16} color="inherit" /> : <CancelIcon />}
+                    onClick={() => handleResolveBucketSubmit('Reject')}
+                    sx={{
+                      flex: 1,
+                      fontWeight: 800,
+                      py: 1.25,
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                    }}
+                  >
+                    Reject Outcome
+                  </Button>
+                </Box>
+
+                {/* Collapsible Advanced JSON Section */}
+                <Box sx={{ mt: 1 }}>
+                  <Button
+                    size="small"
+                    onClick={() => setShowAdvancedJson(!showAdvancedJson)}
+                    endIcon={showAdvancedJson ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                    sx={{ textTransform: 'none', color: 'text.secondary', fontSize: '11px' }}
+                  >
+                    {showAdvancedJson ? 'Hide Advanced Context Injection' : 'Show Advanced Context Injection'}
+                  </Button>
+
+                  <Collapse in={showAdvancedJson}>
+                    <Box sx={{ mt: 1.5, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                        Directly inject arbitrary JSON variables into the instance context:
+                      </Typography>
+                      <TextField
+                        multiline
+                        rows={4}
+                        fullWidth
+                        value={additionalContextJson}
+                        onChange={(e) => setAdditionalContextJson(e.target.value)}
+                        placeholder="{\n  &quot;manualOverride&quot;: true\n}"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            fontFamily: 'monospace',
+                            fontSize: '12px',
+                            bgcolor: 'rgba(0, 0, 0, 0.04)'
+                          }
+                        }}
+                      />
+                      <FormControlLabel
+                        sx={{ mt: 1 }}
+                        control={
+                          <Checkbox
+                            checked={confirmedSafety}
+                            onChange={(e) => setConfirmedSafety(e.target.checked)}
+                            color="warning"
+                          />
+                        }
+                        label={
+                          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                            Confirm direct engine context override
+                          </Typography>
+                        }
+                      />
+                      <Box sx={{ mt: 1, textAlign: 'right' }}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="warning"
+                          disabled={!confirmedSafety || resuming}
+                          onClick={handleDirectResumeSubmit}
+                        >
+                          Execute Direct Context Override
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Collapse>
+                </Box>
+              </>
+            ) : (
+              <>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Directly resume this workflow instance. Inject variables into the context:
                 </Typography>
-              }
-            />
+                <TextField
+                  multiline
+                  rows={6}
+                  fullWidth
+                  value={additionalContextJson}
+                  onChange={(e) => setAdditionalContextJson(e.target.value)}
+                  placeholder="{\n  &quot;approved&quot;: true\n}"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      bgcolor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={confirmedSafety}
+                      onChange={(e) => setConfirmedSafety(e.target.checked)}
+                      color="warning"
+                    />
+                  }
+                  label={
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: confirmedSafety ? 'text.primary' : 'warning.main' }}>
+                      I confirm that this manual override is authorized.
+                    </Typography>
+                  }
+                />
+                <Box sx={{ textAlign: 'right' }}>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={handleDirectResumeSubmit}
+                    disabled={!confirmedSafety || resuming}
+                    startIcon={resuming ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+                    sx={{ fontWeight: 700, px: 3 }}
+                  >
+                    Confirm & Execute Resume
+                  </Button>
+                </Box>
+              </>
+            )}
           </Box>
         )}
 
-        {/* Tab 1: Kafka Event */}
+        {/* Tab 1: External REST API */}
         {activeTab === 1 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              <strong>Standard Event-Driven Integration Pattern:</strong> Downstream microservices, message queues, or integration partners can resume this instance by emitting a matching event to Kafka.
-            </Typography>
+            <Alert severity="success" sx={{ borderRadius: 2, bgcolor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+              <AlertTitle sx={{ fontWeight: 800, fontSize: '13px' }}>
+                External System Integration Hint: No Instance UUID Required
+              </AlertTitle>
+              <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.5 }}>
+                Your external approval portal or CRM does <strong>not</strong> need to store the internal instance UUID. It only needs the business document key (<strong><code>cafId = {cafId}</code></strong>).
+              </Typography>
+            </Alert>
 
-            <Paper
-              sx={{
-                p: 2,
-                bgcolor: 'rgba(0, 0, 0, 0.05)',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                position: 'relative'
-              }}
-            >
+            {/* Accept cURL */}
+            <Paper sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.05)', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#34d399' }}>
+                  1. EXTERNAL ACCEPT via PUT /api/forms/{'{cafId}'}/status (RECOMMENDED)
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={copiedKey === 'acceptCurl' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
+                  onClick={() => handleCopy(restAcceptCurl, 'acceptCurl')}
+                  sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
+                >
+                  {copiedKey === 'acceptCurl' ? 'Copied!' : 'Copy cURL'}
+                </Button>
+              </Box>
+              <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                {restAcceptCurl}
+              </pre>
+            </Paper>
+
+            {/* Reject cURL */}
+            <Paper sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.05)', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#f87171' }}>
+                  2. EXTERNAL REJECT via PUT /api/forms/{'{cafId}'}/status
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={copiedKey === 'rejectCurl' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
+                  onClick={() => handleCopy(restRejectCurl, 'rejectCurl')}
+                  sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
+                >
+                  {copiedKey === 'rejectCurl' ? 'Copied!' : 'Copy cURL'}
+                </Button>
+              </Box>
+              <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                {restRejectCurl}
+              </pre>
+            </Paper>
+
+            {/* Direct Instance Resume cURL */}
+            <Paper sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.05)', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                  3. DIRECT ENGINE OVERRIDE via POST /api/instances/{'{id}'}/resume
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={copiedKey === 'directCurl' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
+                  onClick={() => handleCopy(directEngineCurl, 'directCurl')}
+                  sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
+                >
+                  {copiedKey === 'directCurl' ? 'Copied!' : 'Copy cURL'}
+                </Button>
+              </Box>
+              <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                {directEngineCurl}
+              </pre>
+            </Paper>
+          </Box>
+        )}
+
+        {/* Tab 2: Kafka Resolution */}
+        {activeTab === 2 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Alert severity="info" sx={{ borderRadius: 2, bgcolor: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)' }}>
+              <AlertTitle sx={{ fontWeight: 800, fontSize: '13px' }}>
+                Dedicated Kafka Resolution Topic: workflow-bucket-resolution
+              </AlertTitle>
+              <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.5 }}>
+                External microservices and approval systems can publish directly using <strong><code>cafId</code></strong>. The engine automatically correlates the active workflow instance, updates the database, and advances execution.
+              </Typography>
+            </Alert>
+
+            <Paper sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.05)', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#818cf8' }}>
                   KAFKA EVENT PAYLOAD (JSON)
                 </Typography>
                 <Button
                   size="small"
                   variant="outlined"
-                  startIcon={copiedKey === 'kafka' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
-                  onClick={() => handleCopy(kafkaPayload, 'kafka')}
+                  startIcon={copiedKey === 'kafkaJson' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
+                  onClick={() => handleCopy(kafkaResolutionPayload, 'kafkaJson')}
                   sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
                 >
-                  {copiedKey === 'kafka' ? 'Copied!' : 'Copy JSON'}
+                  {copiedKey === 'kafkaJson' ? 'Copied!' : 'Copy JSON'}
                 </Button>
               </Box>
               <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto' }}>
-                {kafkaPayload}
+                {kafkaResolutionPayload}
               </pre>
             </Paper>
 
-            <Paper
-              sx={{
-                p: 2,
-                bgcolor: 'rgba(0, 0, 0, 0.05)',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                position: 'relative'
-              }}
-            >
+            <Paper sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.05)', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  KAFKA CONSOLE PRODUCER CLI
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#818cf8' }}>
+                  KAFKA CONSOLE PRODUCER CLI COMMAND
                 </Typography>
                 <Button
                   size="small"
                   variant="outlined"
                   startIcon={copiedKey === 'kafkaCli' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
-                  onClick={() => handleCopy(kafkaCommand, 'kafkaCli')}
+                  onClick={() => handleCopy(kafkaResolutionCli, 'kafkaCli')}
                   sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
                 >
                   {copiedKey === 'kafkaCli' ? 'Copied!' : 'Copy CLI'}
                 </Button>
               </Box>
               <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                {kafkaCommand}
-              </pre>
-            </Paper>
-          </Box>
-        )}
-
-        {/* Tab 2: cURL Command */}
-        {activeTab === 2 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              <strong>Direct REST Engine Endpoint:</strong> SREs or automated remediation scripts can execute this curl command from any terminal or CI/CD pipeline:
-            </Typography>
-
-            <Paper
-              sx={{
-                p: 2,
-                bgcolor: 'rgba(0, 0, 0, 0.05)',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                position: 'relative'
-              }}
-            >
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  HTTP POST CURL COMMAND
-                </Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={copiedKey === 'curl' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
-                  onClick={() => handleCopy(curlCommand, 'curl')}
-                  sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
-                >
-                  {copiedKey === 'curl' ? 'Copied!' : 'Copy cURL'}
-                </Button>
-              </Box>
-              <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                {curlCommand}
-              </pre>
-            </Paper>
-          </Box>
-        )}
-
-        {/* Tab 3: Bucket Form Update */}
-        {activeTab === 3 && pendingBucket && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              <strong>Human-In-The-Loop Bucket Resolution:</strong> This instance is suspended on business outcome bucket <strong>{pendingBucket.bucketName || pendingBucket.bucketId}</strong>. Resolving the domain entity in the database will resume the workflow.
-            </Typography>
-
-            <Paper
-              sx={{
-                p: 2,
-                bgcolor: 'rgba(0, 0, 0, 0.05)',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                position: 'relative'
-              }}
-            >
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  SIMULATOR STATUS UPDATE (PUT /api/forms/:id/status)
-                </Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={copiedKey === 'bucketCurl' ? <CheckIcon color="success" /> : <ContentCopyIcon />}
-                  onClick={() => handleCopy(bucketCurl, 'bucketCurl')}
-                  sx={{ textTransform: 'none', fontSize: '11px', py: 0.25 }}
-                >
-                  {copiedKey === 'bucketCurl' ? 'Copied!' : 'Copy cURL'}
-                </Button>
-              </Box>
-              <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                {bucketCurl}
+                {kafkaResolutionCli}
               </pre>
             </Paper>
           </Box>
@@ -452,19 +683,6 @@ export const ResumeInstructionsDialog = ({ open, onClose, instance, onShowNotifi
         <Button onClick={onClose} sx={{ color: 'text.secondary' }}>
           Close
         </Button>
-
-        {activeTab === 0 && (
-          <Button
-            variant="contained"
-            color="warning"
-            onClick={handleResumeSubmit}
-            disabled={!confirmedSafety || resuming}
-            startIcon={resuming ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
-            sx={{ fontWeight: 700, px: 3 }}
-          >
-            {resuming ? 'Resuming...' : 'Confirm & Execute Resume'}
-          </Button>
-        )}
       </DialogActions>
     </Dialog>
   );
