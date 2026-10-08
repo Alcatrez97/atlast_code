@@ -76,6 +76,7 @@ public class BucketService {
         bucket.setAutoActions(dto.getAutoActions());
         bucket.setActive(true);
         bucket.setCircleId(dto.getCircleId());
+        bucket.setPendingFormStatus(dto.getPendingFormStatus());
         bucket.setPossibleOutcomes(dto.getPossibleOutcomes());
 
         bucket = bucketRepository.save(bucket);
@@ -104,6 +105,7 @@ public class BucketService {
         bucket.setAutoActions(dto.getAutoActions());
         bucket.setActive(dto.isActive());
         bucket.setCircleId(dto.getCircleId());
+        bucket.setPendingFormStatus(dto.getPendingFormStatus());
         bucket.setPossibleOutcomes(dto.getPossibleOutcomes());
         bucket.setUpdatedAt(LocalDateTime.now());
 
@@ -168,6 +170,7 @@ public class BucketService {
         dto.setAutoActions(bucket.getAutoActions());
         dto.setActive(bucket.isActive());
         dto.setCircleId(bucket.getCircleId());
+        dto.setPendingFormStatus(bucket.getPendingFormStatus());
         if (bucket.getPossibleOutcomes() == null || bucket.getPossibleOutcomes().isEmpty()) {
             dto.setPossibleOutcomes(List.of(
                 new com.vi.atlas.common.dto.BucketOutcomeDto("Accept"),

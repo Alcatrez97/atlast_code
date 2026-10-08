@@ -42,6 +42,9 @@ public class BucketDto implements Serializable {
     @Schema(description = "Partition Circle ID number (e.g. 101, 102)", example = "101")
     private Integer circleId;
 
+    @Schema(description = "Optional override for initial form status upon entering bucket. Defaults to {bucketId} Pending if null", example = "A2AUDIT_PENDING")
+    private String pendingFormStatus;
+
     @Schema(description = "Possible resolution outcomes for this bucket. Defaults to [Accept, Reject] if not configured.")
     private List<BucketOutcomeDto> possibleOutcomes;
 
@@ -88,6 +91,9 @@ public class BucketDto implements Serializable {
 
     public List<BucketOutcomeDto> getPossibleOutcomes() { return possibleOutcomes; }
     public void setPossibleOutcomes(List<BucketOutcomeDto> possibleOutcomes) { this.possibleOutcomes = possibleOutcomes; }
+
+    public String getPendingFormStatus() { return pendingFormStatus; }
+    public void setPendingFormStatus(String pendingFormStatus) { this.pendingFormStatus = pendingFormStatus; }
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }

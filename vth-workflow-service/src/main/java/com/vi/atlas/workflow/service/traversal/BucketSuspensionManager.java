@@ -64,11 +64,30 @@ public class BucketSuspensionManager {
             return;
         }
 
-        // 1. Update or create domain entity status
+        // 1. Resolve configurable pending form status
+        String pendingStatus = null;
+        if (node != null && node.getData() != null && node.getData().get("pendingFormStatus") != null) {
+            String customStatus = node.getData().get("pendingFormStatus").toString().trim();
+            if (!customStatus.isBlank()) {
+                pendingStatus = customStatus;
+            }
+        }
+        if (pendingStatus == null) {
+            Optional<Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+            if (bucketOpt.isPresent() && bucketOpt.get().getPendingFormStatus() != null
+                    && !bucketOpt.get().getPendingFormStatus().isBlank()) {
+                pendingStatus = bucketOpt.get().getPendingFormStatus().trim();
+            }
+        }
+        if (pendingStatus == null) {
+            pendingStatus = bucketId + " Pending";
+        }
+
+        // Update or create domain entity status
         String workflowKey = version != null && version.getWorkflowDefinition() != null
                 ? version.getWorkflowDefinition().getKey()
                 : null;
-        entityStatusSyncService.syncStatus(workflowKey, formId, bucketId + " Pending", bucketId);
+        entityStatusSyncService.syncStatus(workflowKey, formId, pendingStatus, bucketId);
 
         // 2. Find the previous completed step to chain the revert trail
         String previousStepId = null;

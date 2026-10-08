@@ -146,18 +146,24 @@ public class CreateBucketCommand implements WorkflowCommand {
 
         // 2. Update CustomerForm and create RevertStatus
         if (contextId != null && !contextId.isBlank()) {
+            // Resolve pending status string
+            String pendingStatus = bucketOpt.isPresent() && bucketOpt.get().getPendingFormStatus() != null
+                    && !bucketOpt.get().getPendingFormStatus().isBlank()
+                    ? bucketOpt.get().getPendingFormStatus().trim()
+                    : bucketId + " Pending";
+
             // Update Form Status
             Long cafId = CustomerForm.parseCafId(contextId);
             if (cafId != null) {
                 Optional<CustomerForm> formOpt = customerFormRepository.findById(cafId);
                 if (formOpt.isPresent()) {
                     CustomerForm form = formOpt.get();
-                    form.setFormStatus(bucketId + " Pending");
+                    form.setFormStatus(pendingStatus);
                     customerFormRepository.save(form);
                 } else {
                     CustomerForm form = new CustomerForm();
                     form.setId(cafId);
-                    form.setFormStatus(bucketId + " Pending");
+                    form.setFormStatus(pendingStatus);
                     customerFormRepository.save(form);
                 }
             }

@@ -94,6 +94,7 @@ public class DatabaseMigrationRunner {
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_table", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_pk_column", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_status_column", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "pending_form_status", "VARCHAR(100)");
 
             // Re-enable referential integrity
             try {

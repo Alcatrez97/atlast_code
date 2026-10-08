@@ -49,6 +49,9 @@ public class Bucket {
     @Column(name = "circle_id")
     private Integer circleId;
 
+    @Column(name = "pending_form_status", length = 100)
+    private String pendingFormStatus;
+
     @Column(name = "possible_outcomes", length = 2000)
     @Convert(converter = com.vi.atlas.workflow.entity.converter.BucketOutcomeListConverter.class)
     private java.util.List<com.vi.atlas.common.dto.BucketOutcomeDto> possibleOutcomes;
@@ -112,6 +115,9 @@ public class Bucket {
 
     public java.util.List<com.vi.atlas.common.dto.BucketOutcomeDto> getPossibleOutcomes() { return possibleOutcomes; }
     public void setPossibleOutcomes(java.util.List<com.vi.atlas.common.dto.BucketOutcomeDto> possibleOutcomes) { this.possibleOutcomes = possibleOutcomes; }
+
+    public String getPendingFormStatus() { return pendingFormStatus; }
+    public void setPendingFormStatus(String pendingFormStatus) { this.pendingFormStatus = pendingFormStatus; }
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }

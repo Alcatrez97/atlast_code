@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.service;
 
+import com.vi.atlas.workflow.entity.Bucket;
 import com.vi.atlas.workflow.entity.BucketExecution;
 import com.vi.atlas.workflow.entity.CustomerForm;
 import com.vi.atlas.workflow.entity.RevertStatus;
@@ -120,8 +121,17 @@ public class BucketResolutionService {
             }
         }
 
+        String nextPendingStatus = null;
+        if (nextPending != null) {
+            Optional<Bucket> nextBucketOpt = bucketRepository.findByBucketId(nextPending.getBucketId());
+            nextPendingStatus = nextBucketOpt.isPresent() && nextBucketOpt.get().getPendingFormStatus() != null
+                    && !nextBucketOpt.get().getPendingFormStatus().isBlank()
+                    ? nextBucketOpt.get().getPendingFormStatus().trim()
+                    : nextPending.getBucketId() + " Pending";
+        }
+
         String mappedStatus = nextPending != null
-                ? nextPending.getBucketId() + " Pending"
+                ? nextPendingStatus
                 : deriveFormStatus(bucketId, outcome);
 
         String workflowKey = instOpt.map(WorkflowInstance::getWorkflowKey).orElse(null);

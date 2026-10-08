@@ -319,5 +319,68 @@ public class BucketApprovalIntegrationTest {
         assertEquals("COMPLETED", execution.getStatus());
         assertEquals("end-rejected", execution.getOutcomeNodeId());
     }
+
+    @Test
+    public void testCustomPendingFormStatusInBucketNode() {
+        String key = "WORKFLOW_CUSTOM_PENDING_STATUS_" + UUID.randomUUID().toString().substring(0, 8);
+        WorkflowDefinitionDto defDto = new WorkflowDefinitionDto();
+        defDto.setKey(key);
+        defDto.setName("Custom Pending Status Test");
+        defDto.setDescription("Test custom pending status");
+        WorkflowDefinitionDto saved = workflowService.createWorkflowDefinition(defDto);
+        String versionId = saved.getVersions().get(0).getId();
+
+        List<WorkflowNodeDto> nodes = new ArrayList<>();
+        WorkflowNodeDto start = new WorkflowNodeDto();
+        start.setId("start");
+        start.setType("START");
+        nodes.add(start);
+
+        WorkflowNodeDto bucketNode = new WorkflowNodeDto();
+        bucketNode.setId("bucket-custom");
+        bucketNode.setType("BUCKET");
+        bucketNode.setLabel("Custom Pending Bucket");
+        bucketNode.getData().put("bucketId", "A2AUDIT");
+        bucketNode.getData().put("pendingFormStatus", "A2AUDIT_PENDING");
+        nodes.add(bucketNode);
+
+        WorkflowNodeDto endNode = new WorkflowNodeDto();
+        endNode.setId("end");
+        endNode.setType("END");
+        endNode.setLabel("End");
+        nodes.add(endNode);
+
+        List<WorkflowEdgeDto> edges = new ArrayList<>();
+        WorkflowEdgeDto e1 = new WorkflowEdgeDto();
+        e1.setSource("start");
+        e1.setTarget("bucket-custom");
+        edges.add(e1);
+
+        WorkflowEdgeDto e2 = new WorkflowEdgeDto();
+        e2.setSource("bucket-custom");
+        e2.setTarget("end");
+        edges.add(e2);
+
+        WorkflowGraphDto graph = new WorkflowGraphDto();
+        graph.setNodes(nodes);
+        graph.setEdges(edges);
+
+        workflowService.updateDraftVersion(versionId, graph);
+        workflowService.transitionVersionStatus(versionId, "REVIEW");
+        workflowService.transitionVersionStatus(versionId, "APPROVED");
+        workflowService.transitionVersionStatus(versionId, "PUBLISHED");
+
+        String formId = "FORM_" + UUID.randomUUID().toString().substring(0, 8);
+        ExecutionRequestDto req = new ExecutionRequestDto();
+        req.setContextId(formId);
+        req.setContext(new HashMap<>());
+
+        ExecutionLogDto execution = executionService.execute(key, req);
+        assertEquals("WAITING", execution.getStatus());
+
+        Optional<CustomerForm> formOpt = customerFormRepository.findById(CustomerForm.parseCafId(formId));
+        assertTrue(formOpt.isPresent());
+        assertEquals("A2AUDIT_PENDING", formOpt.get().getFormStatus());
+    }
 }
 

@@ -13,6 +13,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
     const [ownerGroup, setOwnerGroup] = useState('');
     const [autoActions, setAutoActions] = useState('');
     const [active, setActive] = useState(true);
+    const [pendingFormStatus, setPendingFormStatus] = useState('');
     const [possibleOutcomes, setPossibleOutcomes] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     useEffect(() => {
@@ -26,6 +27,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setOwnerGroup(bucket.ownerGroup || '');
             setAutoActions(bucket.autoActions || '');
             setActive(bucket.active);
+            setPendingFormStatus(bucket.pendingFormStatus || '');
             setPossibleOutcomes(bucket.possibleOutcomes || [
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -41,6 +43,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setOwnerGroup('');
             setAutoActions('');
             setActive(true);
+            setPendingFormStatus('');
             setPossibleOutcomes([
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -72,6 +75,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
                 ownerGroup: ownerGroup.trim(),
                 autoActions: autoActions.trim(),
                 active,
+                pendingFormStatus: pendingFormStatus.trim() || undefined,
                 possibleOutcomes: filteredOutcomes
             };
             const url = bucket ? `/api/buckets/${bucket.id}` : '/api/buckets';

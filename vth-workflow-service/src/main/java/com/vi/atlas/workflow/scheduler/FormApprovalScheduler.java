@@ -38,6 +38,9 @@ public class FormApprovalScheduler {
     @Autowired
     private com.vi.atlas.workflow.service.BucketResolutionService bucketResolutionService;
 
+    @Autowired
+    private com.vi.atlas.workflow.repository.BucketRepository bucketRepository;
+
     // Runs every 300 seconds (5 minutes) with fixedDelay
     @Scheduled(fixedDelay = 300000)
     public void pollExternalApprovals() {
@@ -79,7 +82,11 @@ public class FormApprovalScheduler {
                 }
 
                 String bucketId = pendingRevert.getBucketId();
-                String pendingStatusString = bucketId + " Pending";
+                Optional<com.vi.atlas.workflow.entity.Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+                String pendingStatusString = bucketOpt.isPresent() && bucketOpt.get().getPendingFormStatus() != null
+                        && !bucketOpt.get().getPendingFormStatus().isBlank()
+                        ? bucketOpt.get().getPendingFormStatus().trim()
+                        : bucketId + " Pending";
 
                 // 4. Check the CustomerForm status in the database
                 Long cafId = CustomerForm.parseCafId(formId);

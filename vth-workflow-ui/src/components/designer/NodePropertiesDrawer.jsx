@@ -32,6 +32,7 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
   const [label, setLabel] = useState('');
   const [expression, setExpression] = useState('');
   const [bucketId, setBucketId] = useState('');
+  const [pendingFormStatus, setPendingFormStatus] = useState('');
   const [dependencyBuckets, setDependencyBuckets] = useState([]);
   const [ruleId, setRuleId] = useState('');
   const [delayMs, setDelayMs] = useState('');
@@ -117,6 +118,7 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       setLabel(node.label || '');
       setExpression(node.data?.expression || '');
       setBucketId(node.data?.bucketId || '');
+      setPendingFormStatus(node.data?.pendingFormStatus || '');
       setDependencyBuckets(node.data?.dependencyBuckets || []);
       setRuleId(node.data?.ruleId || node.data?.id || '');
       setDelayMs(node.data?.delayMs || '');
@@ -194,6 +196,7 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       }
       else if (nodeType === 'BUCKET') {
         updatedData.bucketId = bucketId;
+        updatedData.pendingFormStatus = pendingFormStatus.trim() || undefined;
         updatedData.dependencyBuckets = dependencyBuckets;
         updatedData.disabledBehavior = disabledBehavior;
       }
@@ -575,6 +578,8 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                     </MenuItem>))}
                   </Select>
                 </FormControl>) : (<TextField fullWidth size="small" label="Bucket ID" value={bucketId} onChange={(e) => setBucketId(e.target.value)} disabled={isReadOnly} placeholder="BCK_001" sx={{ mb: 1.5 }} />)}
+
+                <TextField fullWidth size="small" label="Pending Form Status Override" value={pendingFormStatus} onChange={(e) => setPendingFormStatus(e.target.value)} disabled={isReadOnly} placeholder="Auto-derived (e.g. A2 Pending)" helperText="Overrides form status when entering this bucket node (optional)" sx={{ mb: 1.5 }} />
 
                 {/* Dependency Buckets selection */}
                 {!isReadOnly ? (<FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
