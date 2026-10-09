@@ -164,6 +164,7 @@ public class CreateBucketCommand implements WorkflowCommand {
                     CustomerForm form = new CustomerForm();
                     form.setId(cafId);
                     form.setFormStatus(pendingStatus);
+                    form.setCircleId(101);
                     customerFormRepository.save(form);
                 }
             }

@@ -73,8 +73,9 @@ public class EntityStatusSyncService {
                 CustomerForm form = new CustomerForm();
                 form.setId(cafId);
                 form.setFormStatus(newStatus);
+                form.setCircleId(101); // Default circleId 101 for partition mapping
                 customerFormRepository.save(form);
-                log.info("Created CustomerForm with status '{}' for cafId={}", newStatus, cafId);
+                log.info("Created CustomerForm with status '{}' and circleId=101 for cafId={}", newStatus, cafId);
             }
         } catch (Exception e) {
             log.error("Failed updating CustomerForm for cafId={}: {}", cafId, e.getMessage(), e);
