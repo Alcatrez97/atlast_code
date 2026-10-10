@@ -34,6 +34,10 @@ public class EntityStatusSyncService {
      * Synchronizes entity status on BUCKET suspension or resolution based on convention or explicit schema override.
      */
     public void syncStatus(String workflowKey, String contextId, String newStatus, String bucketId) {
+        syncStatus(workflowKey, contextId, newStatus, bucketId, null);
+    }
+
+    public void syncStatus(String workflowKey, String contextId, String newStatus, String bucketId, java.util.Map<String, Object> context) {
         if (contextId == null || contextId.isBlank() || workflowKey == null || workflowKey.isBlank()) {
             log.warn("Cannot sync entity status: missing contextId or workflowKey (contextId={}, workflowKey={})", 
                     contextId, workflowKey);
@@ -48,7 +52,7 @@ public class EntityStatusSyncService {
 
         // 1. Telecom Postpaid CAF Domain (Default / Legacy Handler)
         if ("POSTPAID_ONBOARD_CAF".equalsIgnoreCase(mapping.getTableName())) {
-            syncCustomerForm(contextId, newStatus, bucketId);
+            syncCustomerForm(contextId, newStatus, bucketId, context);
             return;
         }
 
@@ -56,10 +60,10 @@ public class EntityStatusSyncService {
         syncGenericEntity(mapping, contextId, newStatus);
     }
 
-    private void syncCustomerForm(String contextId, String newStatus, String bucketId) {
-        Long cafId = CustomerForm.parseCafId(contextId);
+    private void syncCustomerForm(String contextId, String newStatus, String bucketId, java.util.Map<String, Object> context) {
+        Long cafId = resolveCafId(contextId, context);
         if (cafId == null) {
-            log.warn("Cannot sync CustomerForm because contextId '{}' cannot be parsed to Long cafId", contextId);
+            log.warn("Cannot sync CustomerForm because contextId '{}' and context do not contain a valid cafId", contextId);
             return;
         }
         try {
@@ -70,16 +74,46 @@ public class EntityStatusSyncService {
                 customerFormRepository.save(form);
                 log.info("Updated CustomerForm status to '{}' for cafId={}", newStatus, cafId);
             } else {
+                Integer circleId = resolveCircleId(context);
                 CustomerForm form = new CustomerForm();
                 form.setId(cafId);
                 form.setFormStatus(newStatus);
-                form.setCircleId(101); // Default circleId 101 for partition mapping
+                form.setCircleId(circleId);
                 customerFormRepository.save(form);
-                log.info("Created CustomerForm with status '{}' and circleId=101 for cafId={}", newStatus, cafId);
+                log.info("Created CustomerForm with status '{}' and circleId={} for cafId={}", newStatus, circleId, cafId);
             }
         } catch (Exception e) {
             log.error("Failed updating CustomerForm for cafId={}: {}", cafId, e.getMessage(), e);
         }
+    }
+
+    private Long resolveCafId(String contextId, java.util.Map<String, Object> context) {
+        if (context != null) {
+            if (context.get("cafId") != null) {
+                Long parsed = CustomerForm.parseCafId(context.get("cafId"));
+                if (parsed != null) return parsed;
+            }
+            if (context.get("caf_id") != null) {
+                Long parsed = CustomerForm.parseCafId(context.get("caf_id"));
+                if (parsed != null) return parsed;
+            }
+            if (context.get("businessKey") != null) {
+                Long parsed = CustomerForm.parseCafId(context.get("businessKey"));
+                if (parsed != null) return parsed;
+            }
+        }
+        return CustomerForm.parseCafId(contextId);
+    }
+
+    private Integer resolveCircleId(java.util.Map<String, Object> context) {
+        if (context != null) {
+            Object cid = context.get("circleId") != null ? context.get("circleId") : context.get("circle_id");
+            if (cid != null) {
+                Long parsed = CustomerForm.parseCafId(cid);
+                if (parsed != null) return parsed.intValue();
+            }
+        }
+        return 101;
     }
 
     private void syncGenericEntity(DomainMappingDto mapping, String contextId, String newStatus) {

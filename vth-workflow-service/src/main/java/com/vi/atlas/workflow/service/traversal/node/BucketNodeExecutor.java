@@ -47,7 +47,7 @@ public class BucketNodeExecutor implements NodeExecutor {
 
         // Side-effects: CustomerForm + RevertStatus + EventSubscription
         bucketSuspensionManager.createBucketRevertStatusAndFormPending(
-                state.instanceId, state.contextId, bucketId, node, state.version);
+                state.instanceId, state.contextId, bucketId, node, state.version, state.context);
         eventSubscriptionManager.createEventSubscription(
                 state.instance, bucketId, node.getId(), Map.of());
 

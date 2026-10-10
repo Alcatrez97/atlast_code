@@ -56,6 +56,15 @@ public class BucketSuspensionManager {
                                                         String bucketId,
                                                         WorkflowNodeDto node,
                                                         WorkflowVersion version) {
+        createBucketRevertStatusAndFormPending(instanceId, formId, bucketId, node, version, null);
+    }
+
+    public void createBucketRevertStatusAndFormPending(String instanceId,
+                                                        String formId,
+                                                        String bucketId,
+                                                        WorkflowNodeDto node,
+                                                        WorkflowVersion version,
+                                                        java.util.Map<String, Object> context) {
         if (formId == null || formId.isBlank()
                 || instanceId == null || instanceId.isBlank()
                 || bucketId == null || bucketId.isBlank()) {
@@ -87,7 +96,7 @@ public class BucketSuspensionManager {
         String workflowKey = version != null && version.getWorkflowDefinition() != null
                 ? version.getWorkflowDefinition().getKey()
                 : null;
-        entityStatusSyncService.syncStatus(workflowKey, formId, pendingStatus, bucketId);
+        entityStatusSyncService.syncStatus(workflowKey, formId, pendingStatus, bucketId, context);
 
         // 2. Find the previous completed step to chain the revert trail
         String previousStepId = null;

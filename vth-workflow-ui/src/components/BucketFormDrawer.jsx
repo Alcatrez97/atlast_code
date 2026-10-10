@@ -188,6 +188,9 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
           {/* Auto Actions */}
           <TextField fullWidth size="small" label="Automatic Actions (Tags)" placeholder="SEND_EMAIL,TRIGGER_WEBHOOK" value={autoActions} onChange={(e) => setAutoActions(e.target.value)} helperText="Comma separated tags to trigger background tasks" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '12px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
 
+          {/* Pending Form Status */}
+          <TextField fullWidth size="small" label="Pending Form Status" placeholder="Auto-derived (e.g. A2 Pending)" value={pendingFormStatus} onChange={(e) => setPendingFormStatus(e.target.value)} helperText="Custom status string set when workflow enters this bucket (optional)" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+
           <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }}/>
 
           {/* Possible Outcomes */}
