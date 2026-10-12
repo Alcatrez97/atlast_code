@@ -6,6 +6,8 @@ import com.vi.atlas.workflow.entity.CustomerForm;
 import com.vi.atlas.workflow.entity.RevertStatus;
 import com.vi.atlas.workflow.entity.WorkflowInstance;
 import com.vi.atlas.workflow.entity.ExecutionLog;
+import com.vi.atlas.workflow.entity.EntityRevert;
+import com.vi.atlas.workflow.repository.EntityRevertRepository;
 import com.vi.atlas.workflow.repository.BucketExecutionRepository;
 import com.vi.atlas.workflow.repository.ExecutionRepository;
 import com.vi.atlas.workflow.repository.CustomerFormRepository;
@@ -34,6 +36,9 @@ public class BucketResolutionService {
 
     @Autowired
     private RevertStatusRepository revertStatusRepository;
+
+    @Autowired
+    private EntityRevertRepository entityRevertRepository;
 
     @Autowired
     private CustomerFormRepository customerFormRepository;
@@ -90,6 +95,28 @@ public class BucketResolutionService {
             log.info("Successfully completed RevertStatus ID: {} for bucketId: {}", rs.getId(), rs.getBucketId());
         } else {
             log.info("No pending RevertStatus record found for instanceId={} and bucketId={}", instanceId, bucketId);
+        }
+
+        // 2b. Update master audit trail EntityRevert to COMPLETED / REVERTED
+        Optional<EntityRevert> pendingEntityRevert = entityRevertRepository
+                .findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(instanceId, bucketId, "PENDING");
+        if (pendingEntityRevert.isPresent()) {
+            EntityRevert er = pendingEntityRevert.get();
+            String resolvedStatus = ("Reject".equalsIgnoreCase(outcome) || "Revert".equalsIgnoreCase(outcome))
+                    ? "REVERTED"
+                    : "COMPLETED";
+            er.setRevertStatus(resolvedStatus);
+            er.setRevertPersonId(resolvedBy != null ? resolvedBy : "ExternalSystem");
+            if (notes != null && !notes.isBlank()) {
+                er.addMetadata("resolution_notes", notes);
+            }
+            if (outcome != null) {
+                er.addMetadata("outcome", outcome);
+            }
+            entityRevertRepository.save(er);
+            log.info("Successfully updated EntityRevert ID: {} to status: {} for bucketId: {}", er.getId(), resolvedStatus, er.getBucketId());
+        } else {
+            log.info("No pending EntityRevert record found for instanceId={} and bucketId={}", instanceId, bucketId);
         }
 
         // 3. Resolve parent businessKey and update CustomerForm status if applicable

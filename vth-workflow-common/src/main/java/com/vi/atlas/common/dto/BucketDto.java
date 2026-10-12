@@ -45,6 +45,9 @@ public class BucketDto implements Serializable {
     @Schema(description = "Optional override for initial form status upon entering bucket. Defaults to {bucketId} Pending if null", example = "A2AUDIT_PENDING")
     private String pendingFormStatus;
 
+    @Schema(description = "Entity Type ID representing the actor or revert type (e.g. WORKFLOW_ENGINE, AGENT, AWCS)", example = "WORKFLOW_ENGINE")
+    private String entTypeId;
+
     @Schema(description = "Possible resolution outcomes for this bucket. Defaults to [Accept, Reject] if not configured.")
     private List<BucketOutcomeDto> possibleOutcomes;
 
@@ -94,6 +97,9 @@ public class BucketDto implements Serializable {
 
     public String getPendingFormStatus() { return pendingFormStatus; }
     public void setPendingFormStatus(String pendingFormStatus) { this.pendingFormStatus = pendingFormStatus; }
+
+    public String getEntTypeId() { return entTypeId; }
+    public void setEntTypeId(String entTypeId) { this.entTypeId = entTypeId; }
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }

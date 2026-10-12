@@ -95,6 +95,40 @@ public class DatabaseMigrationRunner {
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_pk_column", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_status_column", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "pending_form_status", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "ent_type_id", "VARCHAR(100)");
+
+            if (!tableExists(stmt, "postpaid_entity_revert")) {
+                stmt.execute("CREATE SEQUENCE IF NOT EXISTS seq_postpaid_entity_revert START WITH 1 INCREMENT BY 1");
+                stmt.execute("CREATE TABLE postpaid_entity_revert (" +
+                        "entity_revert_id BIGINT PRIMARY KEY, " +
+                        "caf_id BIGINT NOT NULL, " +
+                        "workflow_instance_id VARCHAR(36), " +
+                        "revert_category VARCHAR(30) DEFAULT 'BUCKET' NOT NULL, " +
+                        "bucket_id VARCHAR(100), " +
+                        "ent_type_id VARCHAR(100) NOT NULL, " +
+                        "revert_status VARCHAR(30) DEFAULT 'PENDING' NOT NULL, " +
+                        "ent_person_id VARCHAR(100), " +
+                        "ent_org_id VARCHAR(100), " +
+                        "revert_person_id VARCHAR(100), " +
+                        "revert_org_id VARCHAR(100), " +
+                        "revert_seq_number INT DEFAULT 1 NOT NULL, " +
+                        "is_active INT DEFAULT 1 NOT NULL, " +
+                        "circle_id INT NOT NULL, " +
+                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+                log.info("Created table postpaid_entity_revert successfully.");
+            }
+
+            if (!tableExists(stmt, "postpaid_entity_revert_meta")) {
+                stmt.execute("CREATE SEQUENCE IF NOT EXISTS seq_postpaid_entity_revert_meta START WITH 1 INCREMENT BY 1");
+                stmt.execute("CREATE TABLE postpaid_entity_revert_meta (" +
+                        "meta_id BIGINT PRIMARY KEY, " +
+                        "entity_revert_id BIGINT NOT NULL, " +
+                        "meta_key VARCHAR(100) NOT NULL, " +
+                        "meta_value VARCHAR(4000), " +
+                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+                log.info("Created table postpaid_entity_revert_meta successfully.");
+            }
 
             // Re-enable referential integrity
             try {

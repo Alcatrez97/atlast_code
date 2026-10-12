@@ -421,6 +421,7 @@ CREATE TABLE postpaid_workflow_buckets (
     active                  NUMBER(1,0) DEFAULT 1 NOT NULL,
     circle_id               NUMBER(10,0),
     pending_form_status     VARCHAR2(100 CHAR),
+    ent_type_id             VARCHAR2(100 CHAR),
     possible_outcomes       VARCHAR2(2000 CHAR),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
@@ -463,6 +464,53 @@ CREATE INDEX idx_bex_workflow_key ON postpaid_workflow_bucket_executions(workflo
 CREATE INDEX idx_bex_exec_log_id ON postpaid_workflow_bucket_executions(execution_log_id);
 CREATE INDEX idx_bex_created_at ON postpaid_workflow_bucket_executions(created_at);
 CREATE INDEX idx_bex_instance_id ON postpaid_workflow_bucket_executions(instance_id);
+
+
+-- 11. POSTPAID ENTITY REVERT MASTER TABLE
+CREATE TABLE postpaid_entity_revert (
+    entity_revert_id        NUMBER(19,0) NOT NULL,
+    caf_id                  NUMBER(19,0) NOT NULL,
+    workflow_instance_id    VARCHAR2(36 CHAR),
+    revert_category         VARCHAR2(30 CHAR) DEFAULT 'BUCKET' NOT NULL, -- BUCKET, SYSTEM, NPG, BILLING
+    bucket_id               VARCHAR2(100 CHAR),                          -- A2, AWCS, OBCC (NULL for system reverts)
+    ent_type_id             VARCHAR2(100 CHAR) NOT NULL,                 -- WORKFLOW_ENGINE, AGENT, SUPERVISOR, NPG_SYSTEM, etc.
+    revert_status           VARCHAR2(30 CHAR) NOT NULL,                  -- PENDING, COMPLETED, REVERTED, PARKED, FAILED
+    ent_person_id           VARCHAR2(100 CHAR),                          -- Initiating Agent / System ID
+    ent_org_id              VARCHAR2(100 CHAR),                          -- Initiating Org / Team ID
+    revert_person_id        VARCHAR2(100 CHAR),                          -- Resolving Agent / System ID
+    revert_org_id           VARCHAR2(100 CHAR),                          -- Resolving Org / Team ID
+    revert_seq_number       NUMBER(10,0) DEFAULT 1 NOT NULL,
+    is_active               NUMBER(1,0) DEFAULT 1 NOT NULL,
+    circle_id               NUMBER(10,0) NOT NULL,                       -- Circle / Partition Key
+    created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_entity_revert PRIMARY KEY (entity_revert_id),
+    CONSTRAINT chk_ent_revert_active CHECK (is_active IN (0, 1))
+);
+
+CREATE SEQUENCE seq_postpaid_entity_revert START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+CREATE INDEX idx_ent_revert_bucket_picker ON postpaid_entity_revert(circle_id, revert_category, bucket_id, revert_status, is_active);
+CREATE INDEX idx_ent_revert_system_picker ON postpaid_entity_revert(circle_id, revert_category, ent_type_id, revert_status, is_active);
+CREATE INDEX idx_ent_revert_caf ON postpaid_entity_revert(caf_id);
+CREATE INDEX idx_ent_revert_inst ON postpaid_entity_revert(workflow_instance_id);
+
+
+-- 12. POSTPAID ENTITY REVERT METADATA CHILD TABLE
+CREATE TABLE postpaid_entity_revert_meta (
+    meta_id                 NUMBER(19,0) NOT NULL,
+    entity_revert_id        NUMBER(19,0) NOT NULL,
+    meta_key                VARCHAR2(100 CHAR) NOT NULL, -- e.g. npgTxnId, failureCode, reasonDetails
+    meta_value              CLOB,
+    created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_entity_revert_meta PRIMARY KEY (meta_id),
+    CONSTRAINT fk_ent_revert_meta FOREIGN KEY (entity_revert_id) 
+        REFERENCES postpaid_entity_revert(entity_revert_id) ON DELETE CASCADE
+);
+
+CREATE SEQUENCE seq_postpaid_entity_revert_meta START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+CREATE INDEX idx_revert_meta_fk ON postpaid_entity_revert_meta(entity_revert_id);
 
 
 -- =============================================================================

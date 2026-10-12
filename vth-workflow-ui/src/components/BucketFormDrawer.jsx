@@ -14,6 +14,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
     const [autoActions, setAutoActions] = useState('');
     const [active, setActive] = useState(true);
     const [pendingFormStatus, setPendingFormStatus] = useState('');
+    const [entTypeId, setEntTypeId] = useState('');
     const [possibleOutcomes, setPossibleOutcomes] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     useEffect(() => {
@@ -28,6 +29,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setAutoActions(bucket.autoActions || '');
             setActive(bucket.active);
             setPendingFormStatus(bucket.pendingFormStatus || '');
+            setEntTypeId(bucket.entTypeId || '');
             setPossibleOutcomes(bucket.possibleOutcomes || [
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -44,6 +46,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setAutoActions('');
             setActive(true);
             setPendingFormStatus('');
+            setEntTypeId('');
             setPossibleOutcomes([
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -76,6 +79,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
                 autoActions: autoActions.trim(),
                 active,
                 pendingFormStatus: pendingFormStatus.trim() || undefined,
+                entTypeId: entTypeId.trim() || undefined,
                 possibleOutcomes: filteredOutcomes
             };
             const url = bucket ? `/api/buckets/${bucket.id}` : '/api/buckets';
@@ -190,6 +194,9 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
 
           {/* Pending Form Status */}
           <TextField fullWidth size="small" label="Pending Form Status" placeholder="Auto-derived (e.g. A2 Pending)" value={pendingFormStatus} onChange={(e) => setPendingFormStatus(e.target.value)} helperText="Custom status string set when workflow enters this bucket (optional)" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+
+          {/* Entity Type ID */}
+          <TextField fullWidth size="small" label="Entity Type ID (Revert Actor)" placeholder="WORKFLOW_ENGINE (or AGENT, AWCS)" value={entTypeId} onChange={(e) => setEntTypeId(e.target.value)} helperText="Default actor/system type used for revert audit records (optional)" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
 
           <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }}/>
 
