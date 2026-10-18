@@ -194,13 +194,31 @@ public class BucketSuspensionManager {
                     .map(er -> er.getRevertSeqNumber() + 1)
                     .orElse(1);
 
+            // Resolve initial revert status from node override or bucket definition, default to PENDING
+            String initialRevertStatus = null;
+            if (node != null && node.getData() != null && node.getData().get("pendingRevertStatus") != null) {
+                String val = node.getData().get("pendingRevertStatus").toString().trim();
+                if (!val.isBlank()) {
+                    initialRevertStatus = val;
+                }
+            }
+            if (initialRevertStatus == null) {
+                Optional<Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+                if (bucketOpt.isPresent() && bucketOpt.get().getPendingRevertStatus() != null && !bucketOpt.get().getPendingRevertStatus().isBlank()) {
+                    initialRevertStatus = bucketOpt.get().getPendingRevertStatus().trim();
+                }
+            }
+            if (initialRevertStatus == null || initialRevertStatus.isBlank()) {
+                initialRevertStatus = "PENDING";
+            }
+
             EntityRevert er = new EntityRevert();
             er.setCafId(cafId);
             er.setWorkflowInstanceId(instanceId);
             er.setRevertCategory("BUCKET");
             er.setBucketId(bucketId);
             er.setEntTypeId(entTypeId);
-            er.setRevertStatus("PENDING");
+            er.setRevertStatus(initialRevertStatus);
             er.setActive(true);
             er.setCircleId(circleId);
             er.setRevertSeqNumber(seqNumber);

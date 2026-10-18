@@ -48,6 +48,9 @@ public class BucketDto implements Serializable {
     @Schema(description = "Entity Type ID representing the actor or revert type (e.g. WORKFLOW_ENGINE, AGENT, AWCS)", example = "WORKFLOW_ENGINE")
     private String entTypeId;
 
+    @Schema(description = "Optional initial revert status for postpaid_entity_revert entry when entering bucket. Defaults to PENDING if null", example = "PENDING")
+    private String pendingRevertStatus;
+
     @Schema(description = "Possible resolution outcomes for this bucket. Defaults to [Accept, Reject] if not configured.")
     private List<BucketOutcomeDto> possibleOutcomes;
 
@@ -100,6 +103,9 @@ public class BucketDto implements Serializable {
 
     public String getEntTypeId() { return entTypeId; }
     public void setEntTypeId(String entTypeId) { this.entTypeId = entTypeId; }
+
+    public String getPendingRevertStatus() { return pendingRevertStatus; }
+    public void setPendingRevertStatus(String pendingRevertStatus) { this.pendingRevertStatus = pendingRevertStatus; }
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }

@@ -422,6 +422,7 @@ CREATE TABLE postpaid_workflow_buckets (
     circle_id               NUMBER(10,0),
     pending_form_status     VARCHAR2(100 CHAR),
     ent_type_id             VARCHAR2(100 CHAR),
+    pending_revert_status   VARCHAR2(30 CHAR),
     possible_outcomes       VARCHAR2(2000 CHAR),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     updated_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,

@@ -56,6 +56,9 @@ public class Bucket {
     @Column(name = "ent_type_id", length = 100)
     private String entTypeId;
 
+    @Column(name = "pending_revert_status", length = 30)
+    private String pendingRevertStatus;
+
     @Column(name = "possible_outcomes", length = 2000)
     @Convert(converter = com.vi.atlas.workflow.entity.converter.BucketOutcomeListConverter.class)
     private java.util.List<com.vi.atlas.common.dto.BucketOutcomeDto> possibleOutcomes;
@@ -125,6 +128,9 @@ public class Bucket {
 
     public String getEntTypeId() { return entTypeId; }
     public void setEntTypeId(String entTypeId) { this.entTypeId = entTypeId; }
+
+    public String getPendingRevertStatus() { return pendingRevertStatus; }
+    public void setPendingRevertStatus(String pendingRevertStatus) { this.pendingRevertStatus = pendingRevertStatus; }
 
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }

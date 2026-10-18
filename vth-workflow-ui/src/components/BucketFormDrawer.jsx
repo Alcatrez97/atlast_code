@@ -15,6 +15,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
     const [active, setActive] = useState(true);
     const [pendingFormStatus, setPendingFormStatus] = useState('');
     const [entTypeId, setEntTypeId] = useState('');
+    const [pendingRevertStatus, setPendingRevertStatus] = useState('');
     const [possibleOutcomes, setPossibleOutcomes] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     useEffect(() => {
@@ -30,6 +31,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setActive(bucket.active);
             setPendingFormStatus(bucket.pendingFormStatus || '');
             setEntTypeId(bucket.entTypeId || '');
+            setPendingRevertStatus(bucket.pendingRevertStatus || '');
             setPossibleOutcomes(bucket.possibleOutcomes || [
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -47,6 +49,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
             setActive(true);
             setPendingFormStatus('');
             setEntTypeId('');
+            setPendingRevertStatus('');
             setPossibleOutcomes([
                 { name: 'Accept', formStatus: '' },
                 { name: 'Reject', formStatus: '' }
@@ -80,6 +83,7 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
                 active,
                 pendingFormStatus: pendingFormStatus.trim() || undefined,
                 entTypeId: entTypeId.trim() || undefined,
+                pendingRevertStatus: pendingRevertStatus.trim() || undefined,
                 possibleOutcomes: filteredOutcomes
             };
             const url = bucket ? `/api/buckets/${bucket.id}` : '/api/buckets';
@@ -197,6 +201,9 @@ export const BucketFormDrawer = ({ open, bucket, onClose, onRefresh, onShowNotif
 
           {/* Entity Type ID */}
           <TextField fullWidth size="small" label="Entity Type ID (Revert Actor)" placeholder="WORKFLOW_ENGINE (or AGENT, AWCS)" value={entTypeId} onChange={(e) => setEntTypeId(e.target.value)} helperText="Default actor/system type used for revert audit records (optional)" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
+
+          {/* Initial Revert Status */}
+          <TextField fullWidth size="small" label="Initial Revert Status" placeholder="Defaults to PENDING (e.g. PENDING, OPEN, IN_REVIEW)" value={pendingRevertStatus} onChange={(e) => setPendingRevertStatus(e.target.value)} helperText="Initial status of postpaid_entity_revert entry when entering this bucket (optional)" slotProps={{ input: { sx: { color: 'text.primary', fontSize: '13px' } } }} sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' } }}/>
 
           <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }}/>
 

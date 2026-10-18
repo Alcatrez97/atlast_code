@@ -96,6 +96,7 @@ public class DatabaseMigrationRunner {
             addColumnIfNotExist(stmt, "postpaid_workflow_context_schemas", "target_status_column", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "pending_form_status", "VARCHAR(100)");
             addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "ent_type_id", "VARCHAR(100)");
+            addColumnIfNotExist(stmt, "postpaid_workflow_buckets", "pending_revert_status", "VARCHAR(30)");
 
             if (!tableExists(stmt, "postpaid_entity_revert")) {
                 stmt.execute("CREATE SEQUENCE IF NOT EXISTS seq_postpaid_entity_revert START WITH 1 INCREMENT BY 1");
