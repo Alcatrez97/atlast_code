@@ -65,7 +65,7 @@ public class EntityRevert {
     private Integer circleId;
 
     @OneToMany(mappedBy = "entityRevert", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<EntityRevertMeta> metadataList = new ArrayList<>();
+    private List<EntityRevertDtl> detailsList = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -86,12 +86,16 @@ public class EntityRevert {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public void addDetail(String key, String value) {
+        EntityRevertDtl dtl = new EntityRevertDtl();
+        dtl.setEntityRevert(this);
+        dtl.setKey(key);
+        dtl.setValue(value);
+        this.detailsList.add(dtl);
+    }
+
     public void addMetadata(String key, String value) {
-        EntityRevertMeta meta = new EntityRevertMeta();
-        meta.setEntityRevert(this);
-        meta.setMetaKey(key);
-        meta.setMetaValue(value);
-        this.metadataList.add(meta);
+        addDetail(key, value);
     }
 
     // Getters and Setters
@@ -137,8 +141,11 @@ public class EntityRevert {
     public Integer getCircleId() { return circleId; }
     public void setCircleId(Integer circleId) { this.circleId = circleId; }
 
-    public List<EntityRevertMeta> getMetadataList() { return metadataList; }
-    public void setMetadataList(List<EntityRevertMeta> metadataList) { this.metadataList = metadataList; }
+    public List<EntityRevertDtl> getDetailsList() { return detailsList; }
+    public void setDetailsList(List<EntityRevertDtl> detailsList) { this.detailsList = detailsList; }
+
+    public List<EntityRevertDtl> getMetadataList() { return detailsList; }
+    public void setMetadataList(List<EntityRevertDtl> metadataList) { this.detailsList = metadataList; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

@@ -496,21 +496,21 @@ CREATE INDEX idx_ent_revert_caf ON postpaid_entity_revert(caf_id);
 CREATE INDEX idx_ent_revert_inst ON postpaid_entity_revert(workflow_instance_id);
 
 
--- 12. POSTPAID ENTITY REVERT METADATA CHILD TABLE
-CREATE TABLE postpaid_entity_revert_meta (
-    meta_id                 NUMBER(19,0) NOT NULL,
+-- 12. POSTPAID ENTITY REVERT DETAIL CHILD TABLE
+CREATE TABLE postpaid_entity_revert_dtl (
+    revert_dtl_id           NUMBER(19,0) NOT NULL,
     entity_revert_id        NUMBER(19,0) NOT NULL,
-    meta_key                VARCHAR2(100 CHAR) NOT NULL, -- e.g. npgTxnId, failureCode, reasonDetails
-    meta_value              VARCHAR2(50 CHAR),
+    "KEY"                   VARCHAR2(100 CHAR) NOT NULL, -- e.g. outcome, reasonDetails
+    "VALUE"                 VARCHAR2(50 CHAR),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT pk_entity_revert_meta PRIMARY KEY (meta_id),
-    CONSTRAINT fk_ent_revert_meta FOREIGN KEY (entity_revert_id) 
+    CONSTRAINT pk_entity_revert_dtl PRIMARY KEY (revert_dtl_id),
+    CONSTRAINT fk_ent_revert_dtl FOREIGN KEY (entity_revert_id) 
         REFERENCES postpaid_entity_revert(entity_revert_id) ON DELETE CASCADE
 );
 
-CREATE SEQUENCE seq_postpaid_entity_revert_meta START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE seq_postpaid_entity_revert_dtl START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 
-CREATE INDEX idx_revert_meta_fk ON postpaid_entity_revert_meta(entity_revert_id);
+CREATE INDEX idx_revert_dtl_fk ON postpaid_entity_revert_dtl(entity_revert_id);
 
 
 -- =============================================================================

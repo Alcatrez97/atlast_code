@@ -119,15 +119,29 @@ public class DatabaseMigrationRunner {
                 log.info("Created table postpaid_entity_revert successfully.");
             }
 
-            if (!tableExists(stmt, "postpaid_entity_revert_meta")) {
-                stmt.execute("CREATE SEQUENCE IF NOT EXISTS seq_postpaid_entity_revert_meta START WITH 1 INCREMENT BY 1");
-                stmt.execute("CREATE TABLE postpaid_entity_revert_meta (" +
-                        "meta_id BIGINT PRIMARY KEY, " +
+            if (!tableExists(stmt, "postpaid_entity_revert_dtl")) {
+                if (tableExists(stmt, "postpaid_entity_revert_meta")) {
+                    try {
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_meta RENAME TO postpaid_entity_revert_dtl");
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_id TO revert_dtl_id");
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_key TO \"KEY\"");
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_value TO \"VALUE\"");
+                        log.info("Renamed table postpaid_entity_revert_meta to postpaid_entity_revert_dtl successfully.");
+                    } catch (Exception ex) {
+                        log.warn("Auto-rename of postpaid_entity_revert_meta failed, creating table postpaid_entity_revert_dtl: {}", ex.getMessage());
+                    }
+                }
+            }
+
+            if (!tableExists(stmt, "postpaid_entity_revert_dtl")) {
+                stmt.execute("CREATE SEQUENCE IF NOT EXISTS seq_postpaid_entity_revert_dtl START WITH 1 INCREMENT BY 1");
+                stmt.execute("CREATE TABLE postpaid_entity_revert_dtl (" +
+                        "revert_dtl_id BIGINT PRIMARY KEY, " +
                         "entity_revert_id BIGINT NOT NULL, " +
-                        "meta_key VARCHAR(100) NOT NULL, " +
-                        "meta_value VARCHAR(50), " +
+                        "\"KEY\" VARCHAR(100) NOT NULL, " +
+                        "\"VALUE\" VARCHAR(50), " +
                         "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
-                log.info("Created table postpaid_entity_revert_meta successfully.");
+                log.info("Created table postpaid_entity_revert_dtl successfully.");
             }
 
             // Re-enable referential integrity
