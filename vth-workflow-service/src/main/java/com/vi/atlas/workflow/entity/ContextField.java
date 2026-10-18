@@ -28,6 +28,7 @@ public class ContextField {
     @Column(name = "field_type", nullable = false, length = 20)
     private String fieldType; // STRING, NUMBER, BOOLEAN, DATE
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "required", nullable = false)
     private boolean required;
 
@@ -47,6 +48,7 @@ public class ContextField {
     @Column(name = "response_mapping", length = 250)
     private String responseMapping;
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "cacheable", nullable = false)
     private boolean cacheable = true;
 

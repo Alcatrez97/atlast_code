@@ -35,6 +35,7 @@ public class EventDefinition {
     @Column(name = "payload_schema", length = 4000)
     private String payloadSchema; // standard JSON structure template/schema
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "active", nullable = false)
     private boolean active = true;
 

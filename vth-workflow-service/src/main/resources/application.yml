@@ -64,3 +64,7 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+    properties:
+      hibernate:
+        type:
+          preferred_boolean_jdbc_type: INTEGER

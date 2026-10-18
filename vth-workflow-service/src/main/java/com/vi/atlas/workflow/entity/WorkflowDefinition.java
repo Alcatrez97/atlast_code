@@ -37,6 +37,7 @@ public class WorkflowDefinition {
     @Column(name = "active_version")
     private Integer activeVersion;
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "active", nullable = false)
     private boolean active = true;
 

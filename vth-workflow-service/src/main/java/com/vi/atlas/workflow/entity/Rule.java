@@ -30,6 +30,7 @@ public class Rule {
     @Column(name = "expression", nullable = false, length = 2000)
     private String expression; // Spring SpEL expression string
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "active", nullable = false)
     private boolean active = true;
 

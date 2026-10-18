@@ -43,6 +43,7 @@ public class Bucket {
     @Column(name = "auto_actions", length = 500)
     private String autoActions; // comma-separated: SEND_EMAIL,TRIGGER_WEBHOOK
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "active", nullable = false)
     private boolean active = true;
 

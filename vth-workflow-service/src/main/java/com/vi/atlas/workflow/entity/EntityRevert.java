@@ -57,6 +57,7 @@ public class EntityRevert {
     @Column(name = "revert_seq_number", nullable = false)
     private Integer revertSeqNumber = 1;
 
+    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
