@@ -125,7 +125,7 @@ public class DatabaseMigrationRunner {
                         "meta_id BIGINT PRIMARY KEY, " +
                         "entity_revert_id BIGINT NOT NULL, " +
                         "meta_key VARCHAR(100) NOT NULL, " +
-                        "meta_value VARCHAR(4000), " +
+                        "meta_value VARCHAR(50), " +
                         "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
                 log.info("Created table postpaid_entity_revert_meta successfully.");
             }

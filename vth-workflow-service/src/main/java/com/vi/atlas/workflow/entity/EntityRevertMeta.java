@@ -23,7 +23,7 @@ public class EntityRevertMeta {
     @Column(name = "meta_key", nullable = false, length = 100)
     private String metaKey;
 
-    @Column(name = "meta_value", length = 4000)
+    @Column(name = "meta_value", length = 50)
     private String metaValue;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -46,7 +46,13 @@ public class EntityRevertMeta {
     public void setMetaKey(String metaKey) { this.metaKey = metaKey; }
 
     public String getMetaValue() { return metaValue; }
-    public void setMetaValue(String metaValue) { this.metaValue = metaValue; }
+    public void setMetaValue(String metaValue) {
+        if (metaValue != null && metaValue.length() > 50) {
+            this.metaValue = metaValue.substring(0, 50);
+        } else {
+            this.metaValue = metaValue;
+        }
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

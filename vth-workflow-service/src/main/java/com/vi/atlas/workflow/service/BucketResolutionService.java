@@ -107,9 +107,6 @@ public class BucketResolutionService {
                     : "COMPLETED";
             er.setRevertStatus(resolvedStatus);
             er.setRevertPersonId(resolvedBy != null ? resolvedBy : "ExternalSystem");
-            if (notes != null && !notes.isBlank()) {
-                er.addMetadata("resolution_notes", notes);
-            }
             if (outcome != null) {
                 er.addMetadata("outcome", outcome);
             }

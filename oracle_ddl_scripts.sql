@@ -501,7 +501,7 @@ CREATE TABLE postpaid_entity_revert_meta (
     meta_id                 NUMBER(19,0) NOT NULL,
     entity_revert_id        NUMBER(19,0) NOT NULL,
     meta_key                VARCHAR2(100 CHAR) NOT NULL, -- e.g. npgTxnId, failureCode, reasonDetails
-    meta_value              CLOB,
+    meta_value              VARCHAR2(50 CHAR),
     created_at              TIMESTAMP(6) DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_entity_revert_meta PRIMARY KEY (meta_id),
     CONSTRAINT fk_ent_revert_meta FOREIGN KEY (entity_revert_id) 
