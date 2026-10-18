@@ -20,10 +20,10 @@ public class EntityRevertDtl {
     @JoinColumn(name = "entity_revert_id", nullable = false)
     private EntityRevert entityRevert;
 
-    @Column(name = "`key`", nullable = false, length = 100)
+    @Column(name = "key", nullable = false, length = 100)
     private String key;
 
-    @Column(name = "`value`", length = 50)
+    @Column(name = "value", length = 50)
     private String value;
 
     @Column(name = "created_at", nullable = false, updatable = false)

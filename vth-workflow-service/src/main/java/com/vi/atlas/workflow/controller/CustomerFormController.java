@@ -33,6 +33,9 @@ public class CustomerFormController {
     @Autowired
     private com.vi.atlas.workflow.repository.RevertStatusRepository revertStatusRepository;
 
+    @Autowired
+    private com.vi.atlas.workflow.repository.WorkflowInstanceRepository workflowInstanceRepository;
+
     @GetMapping
     @Operation(summary = "Get all customer forms with pagination and filtering", description = "Retrieves all simulated customer form documents with page, size, status, search, and circleId filters")
     public ResponseEntity<Map<String, Object>> getAllForms(
@@ -116,9 +119,23 @@ public class CustomerFormController {
                     CustomerForm saved = repository.save(entity);
 
                     // Find active WAITING executions for this form ID
-                    List<com.vi.atlas.workflow.entity.ExecutionLog> logs = executionRepository.findByContextIdAndStatus(String.valueOf(cafId), com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING);
+                    List<com.vi.atlas.workflow.entity.ExecutionLog> logs = new java.util.ArrayList<>(executionRepository.findByContextIdAndStatus(String.valueOf(cafId), com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING));
                     if (logs.isEmpty() && !id.equals(String.valueOf(cafId))) {
-                        logs = executionRepository.findByContextIdAndStatus(id, com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING);
+                        logs.addAll(executionRepository.findByContextIdAndStatus(id, com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING));
+                    }
+                    if (logs.isEmpty()) {
+                        // Fallback: look up pending RevertStatus by formId (cafId) to find the workflow instance
+                        List<RevertStatus> pendingReverts = revertStatusRepository.findByFormIdOrderByCreatedAtDesc(String.valueOf(cafId));
+                        for (RevertStatus pr : pendingReverts) {
+                            if ("PENDING".equalsIgnoreCase(pr.getStatus()) && pr.getWorkflowInstanceId() != null) {
+                                logs.addAll(executionRepository.findByInstanceIdAndStatus(pr.getWorkflowInstanceId(), com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING));
+                            }
+                        }
+                    }
+                    if (logs.isEmpty()) {
+                        // Fallback: look up by businessKey (cafId) on WorkflowInstance
+                        workflowInstanceRepository.findFirstByBusinessKeyOrderByCreatedAtDesc(String.valueOf(cafId))
+                                .ifPresent(wi -> logs.addAll(executionRepository.findByInstanceIdAndStatus(wi.getId(), com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING)));
                     }
                     if (!logs.isEmpty()) {
                         for (com.vi.atlas.workflow.entity.ExecutionLog logEntry : logs) {

@@ -100,6 +100,14 @@ public class EventRoutingService {
                 .findByBusinessKeyAndEventTypeAndStatus(correlatedKey, eventType, SubscriptionStatus.ACTIVE);
 
         if (activeSubs.isEmpty()) {
+            activeSubs = eventSubscriptionRepository.findByEventTypeAndStatus(eventType, SubscriptionStatus.ACTIVE)
+                    .stream()
+                    .filter(s -> s.getWorkflowInstance() != null &&
+                            correlatedKey.equals(s.getWorkflowInstance().getBusinessKey()))
+                    .toList();
+        }
+
+        if (activeSubs.isEmpty()) {
             log.warn("No active event subscriptions found for correlatedKey: {} and eventType: {}", correlatedKey, eventType);
             return;
         }

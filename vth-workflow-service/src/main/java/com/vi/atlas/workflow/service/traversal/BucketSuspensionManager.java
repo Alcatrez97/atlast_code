@@ -133,11 +133,14 @@ public class BucketSuspensionManager {
             return;
         }
 
+        Long cafId = resolveCafId(formId, context);
+        String resolvedFormId = (cafId != null) ? String.valueOf(cafId) : formId;
+
         // 5. Insert the PENDING RevertStatus record
         RevertStatus revert = new RevertStatus();
         revert.setId(UUID.randomUUID().toString());
         revert.setWorkflowInstanceId(instanceId);
-        revert.setFormId(formId);
+        revert.setFormId(resolvedFormId);
         revert.setBucketId(bucketId);
         revert.setBucketName(node.getLabel() != null ? node.getLabel() : bucketId);
         revert.setStatus("PENDING");

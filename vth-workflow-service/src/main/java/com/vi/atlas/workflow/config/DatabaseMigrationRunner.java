@@ -125,8 +125,8 @@ public class DatabaseMigrationRunner {
                     try {
                         stmt.execute("ALTER TABLE postpaid_entity_revert_meta RENAME TO postpaid_entity_revert_dtl");
                         stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_id TO revert_dtl_id");
-                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_key TO \"KEY\"");
-                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_value TO \"VALUE\"");
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_key TO key");
+                        stmt.execute("ALTER TABLE postpaid_entity_revert_dtl RENAME COLUMN meta_value TO value");
                         log.info("Renamed table postpaid_entity_revert_meta to postpaid_entity_revert_dtl successfully.");
                     } catch (Exception ex) {
                         log.warn("Auto-rename of postpaid_entity_revert_meta failed, creating table postpaid_entity_revert_dtl: {}", ex.getMessage());
@@ -139,10 +139,28 @@ public class DatabaseMigrationRunner {
                 stmt.execute("CREATE TABLE postpaid_entity_revert_dtl (" +
                         "revert_dtl_id BIGINT PRIMARY KEY, " +
                         "entity_revert_id BIGINT NOT NULL, " +
-                        "\"KEY\" VARCHAR(100) NOT NULL, " +
-                        "\"VALUE\" VARCHAR(50), " +
+                        "key VARCHAR(100) NOT NULL, " +
+                        "value VARCHAR(50), " +
                         "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
                 log.info("Created table postpaid_entity_revert_dtl successfully.");
+            } else {
+                try {
+                    try (ResultSet rs = stmt.executeQuery("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE UPPER(TABLE_NAME) = 'POSTPAID_ENTITY_REVERT_DTL'")) {
+                        java.util.List<String> toRename = new java.util.ArrayList<>();
+                        while (rs.next()) {
+                            toRename.add(rs.getString(1));
+                        }
+                        for (String cName : toRename) {
+                            if ("KEY".equals(cName)) {
+                                stmt.execute("ALTER TABLE postpaid_entity_revert_dtl ALTER COLUMN \"KEY\" RENAME TO key");
+                            } else if ("VALUE".equals(cName)) {
+                                stmt.execute("ALTER TABLE postpaid_entity_revert_dtl ALTER COLUMN \"VALUE\" RENAME TO value");
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.debug("Column case adjustment skipped: {}", ex.getMessage());
+                }
             }
 
             // Re-enable referential integrity

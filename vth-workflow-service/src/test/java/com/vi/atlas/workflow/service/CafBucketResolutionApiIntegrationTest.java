@@ -265,4 +265,53 @@ public class CafBucketResolutionApiIntegrationTest {
         assertEquals("COMPLETED", instance.getStatus());
         assertEquals("end-approved", instance.getCurrentNodeId());
     }
+
+    @Test
+    public void testArbitraryContextIdWithCafIdPrimary() throws Exception {
+        String cafId = "982004";
+        String arbitraryContextId = "REQ_TRACKING_SESSION_" + UUID.randomUUID();
+
+        // Step 1: Start workflow sending an arbitrary string as contextId, with cafId in context payload
+        ExecutionRequestDto startReq = new ExecutionRequestDto();
+        startReq.setContextId(arbitraryContextId); // Arbitrary tracking ID / anything
+        startReq.setBusinessKey(null);             // Null business key
+        startReq.setContext(Map.of(
+            "cafId", cafId,
+            "circleId", 1,
+            "customParam1", "arbitraryValue123",
+            "applicantName", "John Doe"
+        ));
+
+        ExecutionLogDto execution = executionService.execute(workflowKey, startReq);
+        assertEquals("WAITING", execution.getStatus());
+
+        // Verify the execution log recorded the caller's arbitrary contextId
+        assertEquals(arbitraryContextId, execution.getContextId());
+        WorkflowInstance waitingInstance = instanceRepository.findById(execution.getInstanceId()).orElseThrow();
+        // Verify businessKey was automatically aligned with cafId from schema primary key
+        assertEquals(cafId, waitingInstance.getBusinessKey());
+
+        // Verify CustomerForm was created with cafId
+        Optional<CustomerForm> formOpt = customerFormRepository.findById(Long.parseLong(cafId));
+        assertTrue(formOpt.isPresent());
+        assertEquals("A2 Pending", formOpt.get().getFormStatus());
+
+        // Step 2: External system sends resolution using ONLY cafId (982004)
+        Map<String, String> acceptPayload = Map.of(
+            "status", "A2Accept",
+            "outcome", "Accept",
+            "notes", "Resolution based strictly on cafId"
+        );
+
+        mockMvc.perform(put("/api/forms/{id}/status", cafId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(acceptPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formStatus").value("A2Accept"));
+
+        // Step 3: Workflow instance resumes to completion
+        WorkflowInstance completedInstance = instanceRepository.findById(execution.getInstanceId()).orElseThrow();
+        assertEquals("COMPLETED", completedInstance.getStatus());
+        assertEquals("end-approved", completedInstance.getCurrentNodeId());
+    }
 }

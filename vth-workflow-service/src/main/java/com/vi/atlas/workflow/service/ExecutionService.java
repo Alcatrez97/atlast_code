@@ -195,33 +195,31 @@ public class ExecutionService {
 
         // Resolve primary contextId (Form / CAF / Order identifier)
         String contextId = request.getContextId();
-        if (contextId == null || contextId.isBlank()) {
-            try {
-                Optional<ContextSchemaDto> schemaOpt = contextSchemaService.getSchemaByKey(workflowKey);
-                if (schemaOpt.isPresent() && schemaOpt.get().getContextIdField() != null && !schemaOpt.get().getContextIdField().isBlank()) {
-                    Object schemaVal = context.get(schemaOpt.get().getContextIdField());
-                    if (schemaVal != null) {
-                        contextId = String.valueOf(schemaVal);
-                    }
+        String schemaPkValue = null;
+        try {
+            Optional<ContextSchemaDto> schemaOpt = contextSchemaService.getSchemaByKey(workflowKey);
+            if (schemaOpt.isPresent() && schemaOpt.get().getContextIdField() != null && !schemaOpt.get().getContextIdField().isBlank()) {
+                Object schemaVal = context.get(schemaOpt.get().getContextIdField());
+                if (schemaVal != null) {
+                    schemaPkValue = String.valueOf(schemaVal);
                 }
-            } catch (Exception e) {
-                log.warn("Failed resolving schema contextIdField for {}: {}", workflowKey, e.getMessage());
             }
+        } catch (Exception e) {
+            log.warn("Failed resolving schema contextIdField for {}: {}", workflowKey, e.getMessage());
         }
+
         if (contextId == null || contextId.isBlank()) {
-            Object cid = context.get("contextId");
-            if (cid != null) contextId = String.valueOf(cid);
-        }
-        if (contextId == null || contextId.isBlank()) {
-            Object cafId = context.get("cafId");
-            if (cafId != null) contextId = String.valueOf(cafId);
-        }
-        if (contextId == null || contextId.isBlank()) {
-            Object trackingId = context.get("trackingId");
-            if (trackingId != null) contextId = String.valueOf(trackingId);
-        }
-        if (contextId == null || contextId.isBlank()) {
-            if (businessKey != null && !businessKey.isBlank()) {
+            if (schemaPkValue != null) {
+                contextId = schemaPkValue;
+            } else if (context.get("contextId") != null) {
+                contextId = String.valueOf(context.get("contextId"));
+            } else if (context.get("cafId") != null) {
+                contextId = String.valueOf(context.get("cafId"));
+            } else if (context.get("caf_id") != null) {
+                contextId = String.valueOf(context.get("caf_id"));
+            } else if (context.get("trackingId") != null) {
+                contextId = String.valueOf(context.get("trackingId"));
+            } else if (businessKey != null && !businessKey.isBlank()) {
                 contextId = businessKey;
             } else {
                 contextId = UUID.randomUUID().toString();
@@ -230,7 +228,15 @@ public class ExecutionService {
         context.putIfAbsent("contextId", contextId);
 
         if (businessKey == null || businessKey.isBlank()) {
-            businessKey = contextId;
+            if (schemaPkValue != null) {
+                businessKey = schemaPkValue;
+            } else if (context.get("cafId") != null) {
+                businessKey = String.valueOf(context.get("cafId"));
+            } else if (context.get("caf_id") != null) {
+                businessKey = String.valueOf(context.get("caf_id"));
+            } else {
+                businessKey = contextId;
+            }
         }
         if (businessKey == null || businessKey.isBlank()) {
             businessKey = "BK-" + instanceId.substring(0, 8);

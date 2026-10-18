@@ -10,7 +10,7 @@ spring:
     active: h2 # Default to H2 for instant local setup
 
   datasource:
-    url: jdbc:h2:file:./data/atlasdb;AUTO_SERVER=TRUE;MODE=PostgreSQL
+    url: jdbc:h2:file:./data/atlasdb;AUTO_SERVER=TRUE;MODE=PostgreSQL;NON_KEYWORDS=KEY,VALUE
     driver-class-name: org.h2.Driver
     username: sa
     password: sa
