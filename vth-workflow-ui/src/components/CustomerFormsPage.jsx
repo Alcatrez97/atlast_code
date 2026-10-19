@@ -19,14 +19,7 @@ const getOutcomeColor = (name) => {
 import { Checkbox, ListItemText } from '@mui/material';
 import { useWorkflowStore } from '../store/workflowStore.js';
 
-const CIRCLE_OPTIONS = [
-  { id: 101, label: '101 - MH (Maharashtra)', badge: 'MH', color: '#00A05A' },
-  { id: 102, label: '102 - DL (Delhi)', badge: 'DL', color: '#0CADEF' },
-  { id: 103, label: '103 - KA (Karnataka)', badge: 'KA', color: '#8b5cf6' },
-  { id: 104, label: '104 - TN (Tamil Nadu)', badge: 'TN', color: '#ff6d00' },
-  { id: 105, label: '105 - DL_NCR (Delhi NCR)', badge: 'NCR', color: '#d97706' },
-  { id: 106, label: '106 - ROWB (West Bengal)', badge: 'WB', color: '#64748b' },
-];
+import { CIRCLE_OPTIONS } from '../constants/circleConstants.js';
 
 export const CustomerFormsPage = ({ onShowNotification }) => {
     const { selectedCircleIds } = useWorkflowStore();
