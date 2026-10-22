@@ -31,11 +31,8 @@ public class KafkaEventListener {
     @Autowired
     private com.vi.atlas.workflow.repository.WorkflowInstanceRepository workflowInstanceRepository;
 
-    /**
-     * Listen to 'caf-lifecycle' topic to start a new workflow execution.
-     */
-    @KafkaListener(topics = "caf-lifecycle", groupId = "atlas-workflow-group")
-    public void handleCafSubmission(@org.springframework.messaging.handler.annotation.Payload Object rawPayload) {
+    @KafkaListener(topics = "${kafka.topics.lifecycle:caf-lifecycle}", groupId = "atlas-workflow-group")
+    public void handleWorkflowTrigger(@org.springframework.messaging.handler.annotation.Payload Object rawPayload) {
         Object payload = rawPayload;
         if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> cr) {
             payload = cr.value();
@@ -47,22 +44,26 @@ public class KafkaEventListener {
             try {
                 event = new com.fasterxml.jackson.databind.ObjectMapper().readValue(str, CafSubmittedEvent.class);
             } catch (Exception ex) {
-                throw new IllegalArgumentException("Failed to deserialize CafSubmittedEvent JSON string", ex);
+                throw new IllegalArgumentException("Failed to deserialize workflow trigger event JSON string", ex);
             }
         } else {
             event = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(payload, CafSubmittedEvent.class);
         }
-        log.info("Received CafSubmittedEvent: cafId={}, workflowKey={}", event.getCafId(), event.getWorkflowKey());
+        String effectiveContextId = event.getContextId() != null ? event.getContextId() : event.getCafId();
+        log.info("Received Kafka workflow trigger: workflowKey={}, contextId={}, businessKey={}",
+                event.getWorkflowKey(), effectiveContextId, event.getBusinessKey());
         try {
             ExecutionRequestDto request = new ExecutionRequestDto();
-            request.setContextId(event.getCafId());
+            request.setContextId(effectiveContextId);
+            request.setBusinessKey(event.getBusinessKey());
             request.setContext(event.getContext());
             
             String workflowKey = event.getWorkflowKey() != null ? event.getWorkflowKey() : "order_processing";
             executionService.execute(workflowKey, request);
-            log.info("Asynchronously triggered workflow execution for key={} and contextId={}", workflowKey, event.getCafId());
+            log.info("Asynchronously triggered workflow execution for key={} and contextId={}", workflowKey, effectiveContextId);
         } catch (Exception e) {
-            log.error("Failed to execute workflow for CAF {}: {}", event.getCafId(), e.getMessage(), e);
+            log.error("Failed to execute workflow for key={} and contextId={}: {}",
+                    event.getWorkflowKey(), effectiveContextId, e.getMessage(), e);
             throw e; // Delegate to Kafka error handler / DLQ
         }
     }

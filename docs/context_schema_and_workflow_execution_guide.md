@@ -124,16 +124,36 @@ curl -X POST http://localhost:9091/api/execute/a2-flow \
 
 ---
 
-## 5. Triggering Workflows via Apache Kafka
+## 5. Triggering Any Workflow via Apache Kafka
 
-The Atlas engine includes a native Kafka consumer (`KafkaEventListener`) listening on the `caf-lifecycle` topic.
+The Atlas engine includes a native Kafka consumer (`KafkaEventListener`) capable of dynamically triggering **any workflow** registered in the engine (e.g. `a2-flow`, `sim-swap`, `port-in`, `device-repair`, or any custom workflow).
 
 ### Kafka Topic Details
-* **Topic Name:** `caf-lifecycle`
+* **Default Topic Name:** `caf-lifecycle` (configurable via `kafka.topics.lifecycle` in `application.yml`)
 * **Consumer Group ID:** `atlas-workflow-group`
-* **Message Key:** `"1004829"` *(recommended: partition on `cafId` or `businessKey`)*
+* **Message Key:** `"1004829"` or your entity's unique key *(recommended: partition on `contextId` / `businessKey`)*
 
-### Kafka Message Payload (`CafSubmittedEvent`)
+### 1. Generic Workflow Trigger Payload (Recommended for Any Workflow)
+You can trigger **any** workflow by specifying `workflowKey` and using `contextId` or `businessKey`. Any arbitrary key-value pairs needed by the workflow nodes/conditions can be supplied inside `context`:
+
+```json
+{
+  "workflowKey": "sim-swap-flow",
+  "contextId": "SWAP-89231",
+  "businessKey": "MSISDN-9876543210",
+  "context": {
+    "requestId": "SWAP-89231",
+    "msisdn": "9876543210",
+    "simType": "ESIM",
+    "channel": "STORE",
+    "agentId": "AGT-552"
+  }
+}
+```
+
+### 2. CAF-Specific Workflow Trigger Payload (`CafSubmittedEvent` Alias)
+For telecom customer application form (CAF) workflows (such as `a2-flow`), you can use the domain-specific `cafId` field. The engine automatically maps `cafId` ↔ `contextId`:
+
 ```json
 {
   "workflowKey": "a2-flow",
@@ -149,11 +169,22 @@ The Atlas engine includes a native Kafka consumer (`KafkaEventListener`) listeni
 }
 ```
 
+### How the Engine Executes Any Workflow from Kafka
+When `KafkaEventListener` consumes a message:
+1. **Dynamic Routing:** Reads `event.getWorkflowKey()`. If not provided, it defaults to `"order_processing"`.
+2. **Context ID Resolution:** Resolves `contextId` from `event.getContextId() != null ? event.getContextId() : event.getCafId()`.
+3. **Execution Service Call:** Dispatches directly to `executionService.execute(workflowKey, executionRequestDto)`.
+4. **Context Schema & Primary Key Validation:** Validates the payload against the workflow definition's primary key and Context Schema rules.
+
 ### Kafka Producer CLI Example
 ```bash
+# Example: Triggering a generic workflow
 kafka-console-producer.sh --bootstrap-server localhost:9092 --topic caf-lifecycle \
   --property "parse.key=true" --property "key.separator=:"
 
+SWAP-89231:{"workflowKey":"sim-swap-flow","contextId":"SWAP-89231","context":{"msisdn":"9876543210","channel":"STORE"}}
+
+# Example: Triggering a CAF workflow
 1004829:{"workflowKey":"a2-flow","cafId":"1004829","context":{"cafId":1004829,"circleId":101,"customerName":"Alice Smith"}}
 ```
 
