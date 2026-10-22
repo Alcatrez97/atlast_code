@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "postpaid_workflow_rules", indexes = {
     @Index(name = "idx_rule_key", columnList = "rule_key", unique = true),
-    @Index(name = "idx_rule_active", columnList = "active")
+    @Index(name = "idx_rule_is_active", columnList = "is_active")
 })
 public class Rule {
 
@@ -30,17 +30,17 @@ public class Rule {
     @Column(name = "expression", nullable = false, length = 2000)
     private String expression; // Spring SpEL expression string
 
-    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
-    @Column(name = "active", nullable = false)
+    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 
     @Column(name = "circle_id")
     private Integer circleId;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     public Rule() {}

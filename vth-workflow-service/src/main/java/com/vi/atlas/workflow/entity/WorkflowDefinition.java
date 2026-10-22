@@ -24,10 +24,10 @@ public class WorkflowDefinition {
     @Column(name = "description", length = 1000)
     private String description;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "workflowDefinition", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -37,8 +37,8 @@ public class WorkflowDefinition {
     @Column(name = "active_version")
     private Integer activeVersion;
 
-    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
-    @Column(name = "active", nullable = false)
+    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 
     @Column(name = "circle_id")

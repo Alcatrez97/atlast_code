@@ -13,7 +13,7 @@ import java.util.HashMap;
 @Table(name = "postpaid_workflow_instances", indexes = {
     @Index(name = "idx_inst_wf_key", columnList = "workflow_key"),
     @Index(name = "idx_inst_status", columnList = "status"),
-    @Index(name = "idx_inst_created_at", columnList = "created_at")
+    @Index(name = "idx_inst_created_date", columnList = "created_date")
 })
 public class WorkflowInstance implements org.springframework.data.domain.Persistable<String> {
 
@@ -72,10 +72,10 @@ public class WorkflowInstance implements org.springframework.data.domain.Persist
     @Convert(converter = GenericJsonConverter.MapConverter.class)
     private Map<String, Object> runtimeGraph;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_date", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     @PrePersist

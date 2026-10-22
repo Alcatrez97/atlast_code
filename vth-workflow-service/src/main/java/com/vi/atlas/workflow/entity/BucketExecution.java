@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_bex_status", columnList = "status"),
     @Index(name = "idx_bex_workflow_key", columnList = "workflow_key"),
     @Index(name = "idx_bex_exec_log_id", columnList = "execution_log_id"),
-    @Index(name = "idx_bex_created_at", columnList = "created_at")
+    @Index(name = "idx_bex_created_date", columnList = "created_date")
 })
 public class BucketExecution {
 
@@ -54,7 +54,7 @@ public class BucketExecution {
     @Column(name = "sla_hours")
     private Integer slaHours;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "resolved_at")

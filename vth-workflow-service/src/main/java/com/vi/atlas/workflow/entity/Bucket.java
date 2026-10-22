@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Table(name = "postpaid_workflow_buckets", indexes = {
     @Index(name = "idx_bucket_id", columnList = "bucket_id", unique = true),
     @Index(name = "idx_bucket_priority", columnList = "priority"),
-    @Index(name = "idx_bucket_active", columnList = "active")
+    @Index(name = "idx_bucket_is_active", columnList = "is_active")
 })
 public class Bucket {
 
@@ -43,8 +43,8 @@ public class Bucket {
     @Column(name = "auto_actions", length = 500)
     private String autoActions; // comma-separated: SEND_EMAIL,TRIGGER_WEBHOOK
 
-    @Convert(converter = org.hibernate.type.NumericBooleanConverter.class)
-    @Column(name = "active", nullable = false)
+    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 
     @Column(name = "circle_id")
@@ -63,10 +63,10 @@ public class Bucket {
     @Convert(converter = com.vi.atlas.workflow.entity.converter.BucketOutcomeListConverter.class)
     private java.util.List<com.vi.atlas.common.dto.BucketOutcomeDto> possibleOutcomes;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     public Bucket() {}

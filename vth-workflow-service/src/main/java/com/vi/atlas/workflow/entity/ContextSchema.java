@@ -42,10 +42,10 @@ public class ContextSchema {
     @Column(name = "target_status_column", length = 100)
     private String targetStatusColumn;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "schema", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)

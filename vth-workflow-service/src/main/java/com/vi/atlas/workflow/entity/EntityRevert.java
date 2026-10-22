@@ -67,10 +67,10 @@ public class EntityRevert {
     @OneToMany(mappedBy = "entityRevert", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EntityRevertDtl> detailsList = new ArrayList<>();
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     public EntityRevert() {}

@@ -42,7 +42,7 @@ public class EventSubscription {
     @JoinColumn(name = "instance_id", nullable = false, foreignKey = @ForeignKey(name = "fk_sub_workflow_instance"))
     private WorkflowInstance workflowInstance;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_date", nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "circle_id")

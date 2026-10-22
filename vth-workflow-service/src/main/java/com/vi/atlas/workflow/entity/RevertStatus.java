@@ -42,7 +42,7 @@ public class RevertStatus {
     @Column(name = "resolution_notes", length = 2000)
     private String resolutionNotes;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_date", nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "circle_id")

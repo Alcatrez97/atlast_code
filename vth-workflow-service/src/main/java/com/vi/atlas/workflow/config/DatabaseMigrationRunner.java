@@ -57,7 +57,7 @@ public class DatabaseMigrationRunner {
                         "company_name VARCHAR(255), " +
                         "form_status VARCHAR(100), " +
                         "circle_id INT, " +
-                        "updated_at TIMESTAMP)");
+                        "updated_date TIMESTAMP)");
                 log.info("Created table POSTPAID_ONBOARD_COCP successfully.");
             }
 
@@ -77,6 +77,40 @@ public class DatabaseMigrationRunner {
             renameColumnIfExist(stmt, "postpaid_workflow_instances", "id", "workflow_instance_pk");
             renameColumnIfExist(stmt, "postpaid_workflow_versions", "id", "workflow_version_pk");
             renameColumnIfExist(stmt, "postpaid_workflow_event_definitions", "id", "event_definition_pk");
+
+            // 1b. Rename active flags to is_active
+            renameColumnIfExist(stmt, "postpaid_workflow_definitions", "active", "is_active");
+            renameColumnIfExist(stmt, "postpaid_workflow_buckets", "active", "is_active");
+            renameColumnIfExist(stmt, "postpaid_workflow_event_definitions", "active", "is_active");
+            renameColumnIfExist(stmt, "postpaid_workflow_rules", "active", "is_active");
+
+            // 1c. Rename created_at -> created_date and updated_at -> updated_date
+            renameColumnIfExist(stmt, "postpaid_workflow_definitions", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_definitions", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_versions", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_versions", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_instances", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_instances", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_buckets", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_buckets", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_bucket_executions", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_context_schemas", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_context_schemas", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_event_definitions", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_event_definitions", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_event_subscriptions", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_integration_registry", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_integration_registry", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_revert_status", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_rules", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_rules", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_staged_payloads", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_workflow_staged_payloads", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "POSTPAID_ONBOARD_CAF", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "POSTPAID_ONBOARD_COCP", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_entity_revert", "created_at", "created_date");
+            renameColumnIfExist(stmt, "postpaid_entity_revert", "updated_at", "updated_date");
+            renameColumnIfExist(stmt, "postpaid_entity_revert_dtl", "created_at", "created_date");
 
             // 2. Clean up orphaned foreign key data to allow FK constraint creation
             cleanOrphanedData(stmt);
@@ -115,8 +149,8 @@ public class DatabaseMigrationRunner {
                         "revert_seq_number INT DEFAULT 1 NOT NULL, " +
                         "is_active VARCHAR(1) DEFAULT 'Y' NOT NULL, " +
                         "circle_id INT NOT NULL, " +
-                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
-                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+                        "created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
+                        "updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
                 log.info("Created table postpaid_entity_revert successfully.");
             }
 
@@ -141,7 +175,7 @@ public class DatabaseMigrationRunner {
                         "entity_revert_id BIGINT NOT NULL, " +
                         "key VARCHAR(100) NOT NULL, " +
                         "value VARCHAR(50), " +
-                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
+                        "created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
                 log.info("Created table postpaid_entity_revert_dtl successfully.");
             } else {
                 try {

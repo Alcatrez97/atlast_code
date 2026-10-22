@@ -32,13 +32,13 @@ public class WorkflowVersion {
     @Convert(converter = WorkflowGraphConverter.class)
     private WorkflowGraphDto definition;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_date", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "created_by", length = 100)
     private String createdBy;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_date", nullable = false)
     private LocalDateTime updatedAt;
 
     @Column(name = "updated_by", length = 100)

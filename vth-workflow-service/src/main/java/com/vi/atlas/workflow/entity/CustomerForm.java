@@ -17,7 +17,7 @@ public class CustomerForm {
     @Column(name = "circle_id")
     private Integer circleId;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_date")
     private LocalDateTime updatedAt;
 
     public CustomerForm() {}
