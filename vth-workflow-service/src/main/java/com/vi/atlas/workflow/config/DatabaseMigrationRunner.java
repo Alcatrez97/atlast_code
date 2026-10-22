@@ -113,7 +113,7 @@ public class DatabaseMigrationRunner {
                         "revert_person_id VARCHAR(100), " +
                         "revert_org_id VARCHAR(100), " +
                         "revert_seq_number INT DEFAULT 1 NOT NULL, " +
-                        "is_active INT DEFAULT 1 NOT NULL, " +
+                        "is_active VARCHAR(1) DEFAULT 'Y' NOT NULL, " +
                         "circle_id INT NOT NULL, " +
                         "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, " +
                         "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
