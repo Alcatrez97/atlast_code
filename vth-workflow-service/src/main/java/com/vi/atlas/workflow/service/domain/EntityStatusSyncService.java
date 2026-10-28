@@ -166,9 +166,9 @@ public class EntityStatusSyncService {
             Integer circleId = wfCtx.getCircleId(1);
 
             java.util.Optional<com.vi.atlas.workflow.entity.EntityRevert> existingPending = entityRevertRepository
-                    .findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(instanceId, bucketId, "PENDING");
+                    .findActiveByWorkflowInstanceIdAndBucketId(instanceId, bucketId);
             if (existingPending.isPresent()) {
-                log.info("PENDING EntityRevert already exists for bucketId={}, instanceId={}", bucketId, instanceId);
+                log.info("Active EntityRevert already exists for bucketId={}, instanceId={}", bucketId, instanceId);
                 return;
             }
 

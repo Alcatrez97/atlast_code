@@ -28,6 +28,11 @@ public interface EntityRevertRepository extends JpaRepository<EntityRevert, Long
             @Param("bucketId") String bucketId,
             @Param("revertStatus") String revertStatus);
 
+    @Query("SELECT er FROM EntityRevert er WHERE er.workflowInstanceId = :workflowInstanceId AND er.bucketId = :bucketId AND er.active = true AND er.revertStatus NOT IN ('COMPLETED', 'REVERTED')")
+    Optional<EntityRevert> findActiveByWorkflowInstanceIdAndBucketId(
+            @Param("workflowInstanceId") String workflowInstanceId,
+            @Param("bucketId") String bucketId);
+
     @Query("SELECT er FROM EntityRevert er WHERE er.cafId = :cafId AND er.revertStatus = :revertStatus AND er.active = true")
     List<EntityRevert> findByCafIdAndRevertStatusAndActiveTrue(
             @Param("cafId") Long cafId,

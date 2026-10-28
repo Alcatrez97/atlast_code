@@ -99,7 +99,7 @@ public class BucketResolutionService {
 
         // 2b. Update master audit trail EntityRevert to COMPLETED / REVERTED
         Optional<EntityRevert> pendingEntityRevert = entityRevertRepository
-                .findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(instanceId, bucketId, "PENDING");
+                .findActiveByWorkflowInstanceIdAndBucketId(instanceId, bucketId);
         if (pendingEntityRevert.isPresent()) {
             EntityRevert er = pendingEntityRevert.get();
             String resolvedStatus = ("Reject".equalsIgnoreCase(outcome) || "Revert".equalsIgnoreCase(outcome))

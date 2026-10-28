@@ -98,8 +98,8 @@ public class BucketSuspensionManagerCircleIdTest {
         bucket.setPendingRevertStatus("PENDING");
         when(bucketRepository.findByBucketId(bucketId)).thenReturn(Optional.of(bucket));
 
-        when(entityRevertRepository.findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(
-                instanceId, bucketId, "PENDING")).thenReturn(Optional.empty());
+        when(entityRevertRepository.findActiveByWorkflowInstanceIdAndBucketId(
+                instanceId, bucketId)).thenReturn(Optional.empty());
 
         Map<String, Object> context = new HashMap<>();
         context.put("cafId", "987654");
@@ -133,8 +133,8 @@ public class BucketSuspensionManagerCircleIdTest {
         bucket.setBucketId(bucketId);
         when(bucketRepository.findByBucketId(bucketId)).thenReturn(Optional.of(bucket));
 
-        when(entityRevertRepository.findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(
-                instanceId, bucketId, "PENDING")).thenReturn(Optional.empty());
+        when(entityRevertRepository.findActiveByWorkflowInstanceIdAndBucketId(
+                instanceId, bucketId)).thenReturn(Optional.empty());
 
         Map<String, Object> context = new HashMap<>();
         context.put("caf_id", "987655");
