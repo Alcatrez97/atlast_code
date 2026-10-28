@@ -1523,30 +1523,29 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                               }}
                             >
                               {/* Left: Context Field (Source) */}
-                              <Autocomplete
-                                freeSolo
-                                clearOnBlur={false}
-                                size="small"
-                                disabled={isReadOnly}
-                                value={row.contextField}
-                                onChange={(_, newVal) => {
-                                  const val = typeof newVal === 'string' ? newVal : (newVal?.fieldKey || newVal || '');
-                                  handleMappingRowChange(idx, 'contextField', val);
-                                }}
-                                onInputChange={(_, newVal, reason) => {
-                                  if (reason !== 'reset') {
-                                    handleMappingRowChange(idx, 'contextField', newVal || '');
-                                  }
-                                }}
-                                options={schemaFields.map(f => f.fieldKey)}
-                                renderInput={(params) => (
-                                  <TextField
-                                    {...params}
-                                    placeholder="e.g. cafId or context.cafId"
-                                    slotProps={{ input: { ...params.InputProps, sx: { fontSize: '11px', fontFamily: 'monospace' } } }}
-                                  />
+                              <Box sx={{ position: 'relative' }}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  disabled={isReadOnly}
+                                  value={row.contextField || ''}
+                                  onChange={(e) => handleMappingRowChange(idx, 'contextField', e.target.value)}
+                                  placeholder="e.g. cafId or context.cafId"
+                                  slotProps={{
+                                    input: {
+                                      sx: { fontSize: '11px', fontFamily: 'monospace' },
+                                      list: schemaFields.length > 0 ? `schema-options-${idx}` : undefined
+                                    }
+                                  }}
+                                />
+                                {schemaFields.length > 0 && (
+                                  <datalist id={`schema-options-${idx}`}>
+                                    {schemaFields.map(f => (
+                                      <option key={f.fieldKey} value={f.fieldKey} />
+                                    ))}
+                                  </datalist>
                                 )}
-                              />
+                              </Box>
 
                               {/* Center: Arrow Icon */}
                               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -1555,9 +1554,10 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
 
                               {/* Right: Outgoing Payload Field (Target) */}
                               <TextField
+                                fullWidth
                                 size="small"
                                 disabled={isReadOnly}
-                                value={row.targetField}
+                                value={row.targetField || ''}
                                 onChange={(e) => handleMappingRowChange(idx, 'targetField', e.target.value)}
                                 placeholder="e.g. cafId, amount"
                                 slotProps={{ input: { sx: { fontSize: '11px', fontFamily: 'monospace' } } }}
