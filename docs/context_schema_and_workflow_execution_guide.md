@@ -246,3 +246,121 @@ Content-Type: application/json
    WHERE caf_id = 1004829;
    ```
 3. `EventRoutingService` correlates `businessKey = "1004829"`, unpauses the instance, and resumes traversal along the outbound edge matching outcome `"Accept"` to the next bucket or completion node.
+
+---
+
+## 8. End-to-End Operational Journey: Rule Decisioning, Bucket Revert Tracking & OM Order Trigger
+
+This section describes how an order moves through the workflow in production—how business rules evaluate context, how verification buckets pause execution and record revert entries, how approvals resume the journey via Kafka without internal UUIDs, and how the final Order Management (OM) order creation is triggered.
+
+```mermaid
+flowchart LR
+    A[CAF Submitted<br/>Kafka / REST] --> B[Rule Node<br/>Evaluates Conditions]
+    B -->|Requires Review| C[Bucket Node<br/>A2 / AWCS / OBCC]
+    B -->|Fast Track| E[Command Node<br/>MQ Publish]
+    C -->|Creates PENDING Row| D[Entity Revert Table<br/>postpaid_entity_revert]
+    D -->|External Approval via Kafka| C
+    C -->|All Approved| E
+    E -->|Kafka Event| F[Order Management System<br/>OM Order Triggered]
+```
+
+### 8.1 Workflow Ingestion (`caf-lifecycle`)
+When CAF processing triggers the workflow, the payload is published to Kafka topic `caf-lifecycle` (with fallback to REST if Kafka send fails). The engine automatically normalizes all fields into the workflow execution context:
+
+| Field | Context Key | Example Value | Description |
+| :--- | :--- | :--- | :--- |
+| **`cafId`** (root) | `cafId` | `"880011"` | Customer CAF identifier |
+| **`workflowKey`** | `workflowKey` | `"postpaid-ind-workflow"` | Target workflow definition |
+| **`circleId`** | `circleId` | `22` | Numeric telecom circle |
+| **`kycMode`** | `kycMode` | `"DKYC"` | Verification type (`EKYC`, `DKYC`, `SKYC`) |
+| **`statusOfSubscriber`** | `statusOfSubscriber` | `"ACTIVE"` | Subscriber lifecycle state |
+| **`isPwd`, `isAwcs`, `isTest`** | `isPwd`, `isAwcs` | `true`, `false` | Physical disability / out-of-circle flags |
+| **`simexDaysDif`, `configDays`** | `simexDaysDif` | `15`, `30` | Migration thresholds (Pre-to-Post) |
+| **`actType`, `custType`** | `actType` | `"NEW"`, `"INDIVIDUAL"` | Activation association metadata |
+
+### 8.2 How Rules Route the Order (Decisioning)
+Before moving into manual verification queues, **Rule Nodes** evaluate dynamic SpEL conditions against the normalized context attributes:
+
+* **DKYC Verification Rule**:
+  * *Condition*: `context.kycMode == 'DKYC'`
+  * *Action*: Routes the order to the **A2 Bucket** for manual document and photo matching.
+* **Out-of-Circle Approval Rule (AWCS)**:
+  * *Condition*: `context.isAwcs == 'Y' || context.circleId != context.homeCircleId`
+  * *Action*: Routes the order to the **AWCS Bucket** for inter-circle clearance.
+* **Pre-to-Post Migration Threshold Rule**:
+  * *Condition*: `context.simexDaysDif > context.configDays`
+  * *Action*: Routes the order to the **Supervisor Review Bucket**.
+* **Zero-Touch Fast Track**:
+  * If the submission is verified `EKYC` and all risk flags are negative (`isAwcs == false && isPwd == false`), the rule branches evaluate directly to the final provisioning command node without manual pauses.
+
+### 8.3 Bucket Movement & Domain Revert Tracking (`postpaid_entity_revert`)
+When an order routes into a **Bucket Node** (e.g. `A2`, `AWCS`), traversal pauses to await human or external system review:
+
+1. **Active Revert Record Insertion**:
+   * The engine inserts a new active row into **`postpaid_entity_revert`**:
+     * `caf_id`: The customer CAF ID (e.g. `880011`).
+     * `circle_id`: The circle ID extracted from context (e.g. `22`).
+     * `bucket_id`: The bucket being paused on (e.g. `'A2'`).
+     * `revert_status`: Set to `PENDING` (or node-defined status such as `A2_PENDING_MANUAL`).
+     * `revert_seq_number`: Incrementing sequence number for this CAF.
+     * `is_active`: `'Y'`.
+2. **CAF Master Table Synchronization**:
+   * Updates `POSTPAID_ONBOARD_CAF.form_status` to `'A2 Pending'` (or configured pending status).
+3. **Queue Visibility**:
+   * External agent portals, queue managers, and circle supervisors query `postpaid_entity_revert` by `circle_id` and `bucket_id` to distribute review workload.
+
+### 8.4 Bucket Resolution & Workflow Resumption (Kafka)
+Once review is completed in the external approval portal, the verification system emits a resolution event to Kafka topic **`workflow-bucket-resolution`**:
+
+* **Kafka Resolution Payload**:
+  *(Note: External approval systems only supply `cafId` and `bucketId`—they do not need to know or transmit internal engine `instanceId`)*
+  ```json
+  {
+    "cafId": 880011,
+    "bucketId": "A2",
+    "outcome": "Accept",
+    "resolvedBy": "SeniorOfficer_42",
+    "resolutionNotes": "Biometric and Proof of Address verified"
+  }
+  ```
+  *(Domain status like `"status": "A2Accept"` is also accepted; the engine automatically normalizes it to outcome `"Accept"`).*
+
+* **Engine Synchronization on Resolution**:
+  1. Finds the active revert entry in `postpaid_entity_revert` for that `cafId` and `bucketId`.
+  2. Updates `postpaid_entity_revert.revert_status = 'COMPLETED'` and records `revert_person_id`.
+  3. Updates `POSTPAID_ONBOARD_CAF.form_status = 'A2Accept'`.
+  4. Resumes workflow execution along the outbound edge matching outcome `"Accept"` to the next node.
+
+### 8.5 Triggering the OM Order via Kafka Command Node
+Once all required bucket approvals and verification stages are satisfied, the workflow transitions into a **Command Node (MQ Publish)**:
+
+1. **Outgoing Payload Mapping**:
+   * The node compiles an Order Creation payload mapped directly from the workflow context:
+     ```json
+     {
+       "cafId": "880011",
+       "circleId": 22,
+       "status": "APPROVED",
+       "kycMode": "DKYC",
+       "resolvedBy": "SeniorOfficer_42",
+       "action": "CREATE_OM_ORDER"
+     }
+     ```
+2. **Kafka Event Emission**:
+   * The engine publishes this message to the downstream Order Management Kafka topic (e.g. `vth.downstream.notifications` or `om-order-requests`).
+   * The partition key is set to `${context.cafId}` to ensure partitioned in-order processing.
+3. **Downstream OMS Provisioning**:
+   * The Order Management System (OMS) consumes the Kafka message, reserves the MSISDN / IMSI, provisions billing and network profiles, and generates the final Order ID.
+   * The workflow completes with status **`COMPLETED`**.
+
+---
+
+### 8.6 Summary Lifecycle & State Transition Matrix
+
+| Stage | Trigger / Origin | Action on `postpaid_entity_revert` | Action on `POSTPAID_ONBOARD_CAF` | Kafka Topic Involved |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Ingestion** | CAF Submission | None | `form_status = 'SUBMITTED'` | `caf-lifecycle` |
+| **2. Rule Check** | In-Memory SpEL | None | Evaluates flags (`kycMode`, `isAwcs`, etc.) | None |
+| **3. Bucket Pause** | Review Node Hit | Insert row (`PENDING`, `bucket_id = 'A2'`, `circle_id`) | `form_status = 'A2 Pending'` | None (Task enqueued) |
+| **4. Bucket Approval**| Agent Portal Resolution | Update row to `COMPLETED`, record `revert_person_id` | `form_status = 'A2Accept'` | `workflow-bucket-resolution` |
+| **5. OM Order Trigger**| Final Command Node | Audit trail preserved | `form_status = 'COMPLETED'` | `vth.downstream.notifications` (OMS) |
