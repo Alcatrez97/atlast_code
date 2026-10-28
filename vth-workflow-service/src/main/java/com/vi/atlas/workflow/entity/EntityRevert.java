@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.entity;
 
+import com.vi.atlas.workflow.entity.converter.YNBooleanConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -57,7 +58,7 @@ public class EntityRevert {
     @Column(name = "revert_seq_number", nullable = false)
     private Integer revertSeqNumber = 1;
 
-    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Convert(converter = YNBooleanConverter.class)
     @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 

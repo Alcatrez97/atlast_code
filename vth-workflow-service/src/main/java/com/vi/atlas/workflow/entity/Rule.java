@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.entity;
 
+import com.vi.atlas.workflow.entity.converter.YNBooleanConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -30,7 +31,7 @@ public class Rule {
     @Column(name = "expression", nullable = false, length = 2000)
     private String expression; // Spring SpEL expression string
 
-    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Convert(converter = YNBooleanConverter.class)
     @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 

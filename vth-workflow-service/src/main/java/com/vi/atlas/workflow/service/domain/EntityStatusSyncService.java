@@ -31,15 +31,17 @@ public class EntityStatusSyncService {
     private JdbcTemplate jdbcTemplate;
 
     /**
-     * Synchronizes entity status on BUCKET suspension or resolution based on convention or explicit schema override.
+     * Synchronizes entity status on BUCKET suspension or resolution based on
+     * convention or explicit schema override.
      */
     public void syncStatus(String workflowKey, String contextId, String newStatus, String bucketId) {
         syncStatus(workflowKey, contextId, newStatus, bucketId, null);
     }
 
-    public void syncStatus(String workflowKey, String contextId, String newStatus, String bucketId, java.util.Map<String, Object> context) {
+    public void syncStatus(String workflowKey, String contextId, String newStatus, String bucketId,
+            java.util.Map<String, Object> context) {
         if (contextId == null || contextId.isBlank() || workflowKey == null || workflowKey.isBlank()) {
-            log.warn("Cannot sync entity status: missing contextId or workflowKey (contextId={}, workflowKey={})", 
+            log.warn("Cannot sync entity status: missing contextId or workflowKey (contextId={}, workflowKey={})",
                     contextId, workflowKey);
             return;
         }
@@ -47,7 +49,8 @@ public class EntityStatusSyncService {
         Optional<ContextSchemaDto> schemaOpt = contextSchemaService.getSchemaByKey(workflowKey);
         DomainMappingDto mapping = conventionService.resolveDomain(workflowKey, schemaOpt.orElse(null));
 
-        log.info("Synchronizing domain entity status. workflowKey={}, contextId={}, newStatus={}, targetTable={}, matchType={}",
+        log.info(
+                "Synchronizing domain entity status. workflowKey={}, contextId={}, newStatus={}, targetTable={}, matchType={}",
                 workflowKey, contextId, newStatus, mapping.getTableName(), mapping.getMatchType());
 
         // 1. Telecom Postpaid CAF Domain (Default / Legacy Handler)
@@ -60,10 +63,12 @@ public class EntityStatusSyncService {
         syncGenericEntity(mapping, contextId, newStatus);
     }
 
-    private void syncCustomerForm(String contextId, String newStatus, String bucketId, java.util.Map<String, Object> context) {
+    private void syncCustomerForm(String contextId, String newStatus, String bucketId,
+            java.util.Map<String, Object> context) {
         Long cafId = resolveCafId(contextId, context);
         if (cafId == null) {
-            log.warn("Cannot sync CustomerForm because contextId '{}' and context do not contain a valid cafId", contextId);
+            log.warn("Cannot sync CustomerForm because contextId '{}' and context do not contain a valid cafId",
+                    contextId);
             return;
         }
         try {
@@ -80,7 +85,8 @@ public class EntityStatusSyncService {
                 form.setFormStatus(newStatus);
                 form.setCircleId(circleId);
                 customerFormRepository.save(form);
-                log.info("Created CustomerForm with status '{}' and circleId={} for cafId={}", newStatus, circleId, cafId);
+                log.info("Created CustomerForm with status '{}' and circleId={} for cafId={}", newStatus, circleId,
+                        cafId);
             }
         } catch (Exception e) {
             log.error("Failed updating CustomerForm for cafId={}: {}", cafId, e.getMessage(), e);
@@ -91,15 +97,18 @@ public class EntityStatusSyncService {
         if (context != null) {
             if (context.get("cafId") != null) {
                 Long parsed = CustomerForm.parseCafId(context.get("cafId"));
-                if (parsed != null) return parsed;
+                if (parsed != null)
+                    return parsed;
             }
             if (context.get("caf_id") != null) {
                 Long parsed = CustomerForm.parseCafId(context.get("caf_id"));
-                if (parsed != null) return parsed;
+                if (parsed != null)
+                    return parsed;
             }
             if (context.get("businessKey") != null) {
                 Long parsed = CustomerForm.parseCafId(context.get("businessKey"));
-                if (parsed != null) return parsed;
+                if (parsed != null)
+                    return parsed;
             }
         }
         return CustomerForm.parseCafId(contextId);
@@ -107,13 +116,20 @@ public class EntityStatusSyncService {
 
     private Integer resolveCircleId(java.util.Map<String, Object> context) {
         if (context != null) {
-            Object cid = context.get("circleId") != null ? context.get("circleId") : context.get("circle_id");
-            if (cid != null) {
-                Long parsed = CustomerForm.parseCafId(cid);
-                if (parsed != null) return parsed.intValue();
+            // Try all common variants of circleId key
+            for (String key : new String[] {
+                    "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
+                    "circle-id", "circleID", "CircleID", "CIRCLEID"
+            }) {
+                Object cid = context.get(key);
+                if (cid != null) {
+                    Long parsed = CustomerForm.parseCafId(cid);
+                    if (parsed != null)
+                        return parsed.intValue();
+                }
             }
         }
-        return 101;
+        return 99;
     }
 
     private void syncGenericEntity(DomainMappingDto mapping, String contextId, String newStatus) {
@@ -137,18 +153,21 @@ public class EntityStatusSyncService {
                     log.info("Inserted new row into table '{}' with {}='{}' and {}='{}'",
                             table, pkCol, contextId, statusCol, newStatus);
                 } catch (Exception insertEx) {
-                    log.warn("Could not insert new row into target table '{}' (it may require extra non-null columns): {}",
+                    log.warn(
+                            "Could not insert new row into target table '{}' (it may require extra non-null columns): {}",
                             table, insertEx.getMessage());
                 }
             }
         } catch (Exception e) {
-            log.warn("Generic domain entity update failed for table '{}' (contextId={}, status={}): {}. Workflow execution will continue.",
+            log.warn(
+                    "Generic domain entity update failed for table '{}' (contextId={}, status={}): {}. Workflow execution will continue.",
                     table, contextId, newStatus, e.getMessage());
         }
     }
 
     private String sanitizeIdentifier(String identifier) {
-        if (identifier == null) return "";
+        if (identifier == null)
+            return "";
         // Only allow safe alphanumeric and underscore characters for SQL identifiers
         return identifier.replaceAll("[^a-zA-Z0-9_]", "");
     }

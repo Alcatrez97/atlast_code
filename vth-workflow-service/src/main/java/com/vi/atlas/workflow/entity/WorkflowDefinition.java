@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.entity;
 
+import com.vi.atlas.workflow.entity.converter.YNBooleanConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public class WorkflowDefinition {
     @Column(name = "active_version")
     private Integer activeVersion;
 
-    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Convert(converter = YNBooleanConverter.class)
     @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 

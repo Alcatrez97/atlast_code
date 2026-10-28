@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.entity;
 
+import com.vi.atlas.workflow.entity.converter.YNBooleanConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -35,7 +36,7 @@ public class EventDefinition {
     @Column(name = "payload_schema", length = 4000)
     private String payloadSchema; // standard JSON structure template/schema
 
-    @Convert(converter = org.hibernate.type.YesNoConverter.class)
+    @Convert(converter = YNBooleanConverter.class)
     @Column(name = "is_active", nullable = false, length = 1)
     private boolean active = true;
 
