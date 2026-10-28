@@ -35,7 +35,6 @@ public class BucketSuspensionManager {
     @Autowired private CustomerFormRepository        customerFormRepository;
     @Autowired private BucketExecutionRepository     bucketExecutionRepository;
     @Autowired private BucketRepository              bucketRepository;
-    @Autowired private EntityRevertRepository        entityRevertRepository;
     @Autowired private com.vi.atlas.workflow.service.domain.EntityStatusSyncService entityStatusSyncService;
 
     // -----------------------------------------------------------------------
@@ -140,7 +139,10 @@ public class BucketSuspensionManager {
             return;
         }
 
-        Long cafId = resolveCafId(formId, context);
+        Long cafId = WorkflowContext.from(context).getCafId();
+        if (cafId == null) {
+            cafId = WorkflowContext.parseStrictNumeric(formId);
+        }
         String resolvedFormId = (cafId != null) ? String.valueOf(cafId) : formId;
 
         // 5. Insert the PENDING RevertStatus record
@@ -158,116 +160,8 @@ public class BucketSuspensionManager {
         log.info("Created PENDING RevertStatus for bucketId={}, instanceId={}, previousStepId={}",
                 bucketId, instanceId, previousStepId);
 
-        // 6. Create PENDING EntityRevert record for review queue picker
-        createPendingEntityRevert(instanceId, formId, bucketId, node, context);
-    }
-
-    private void createPendingEntityRevert(String instanceId, String formId, String bucketId, WorkflowNodeDto node, java.util.Map<String, Object> context) {
-        try {
-            if (context == null && TraversalContextHolder.get() != null) {
-                context = TraversalContextHolder.get().context;
-            }
-            Long cafId = resolveCafId(formId, context);
-            if (cafId == null) {
-                log.warn("Skipping EntityRevert creation - could not resolve numeric cafId from formId={} or context", formId);
-                return;
-            }
-
-            Integer circleId = resolveCircleId(context);
-
-            Optional<EntityRevert> existingPending = entityRevertRepository
-                    .findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(instanceId, bucketId, "PENDING");
-            if (existingPending.isPresent()) {
-                log.info("PENDING EntityRevert already exists for bucketId={}, instanceId={}", bucketId, instanceId);
-                return;
-            }
-
-            // Resolve entTypeId from node data override, or bucket definition, or context, fallback to WORKFLOW_ENGINE
-            String entTypeId = null;
-            if (node != null && node.getData() != null && node.getData().get("entTypeId") != null) {
-                String val = node.getData().get("entTypeId").toString().trim();
-                if (!val.isBlank()) {
-                    entTypeId = val;
-                }
-            }
-            if (entTypeId == null) {
-                Optional<Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
-                if (bucketOpt.isPresent() && bucketOpt.get().getEntTypeId() != null && !bucketOpt.get().getEntTypeId().isBlank()) {
-                    entTypeId = bucketOpt.get().getEntTypeId().trim();
-                }
-            }
-            if (entTypeId == null) {
-                entTypeId = WorkflowContext.from(context).getEntTypeId("WORKFLOW_ENGINE");
-            }
-
-            int seqNumber = entityRevertRepository.findTopByCafIdOrderByRevertSeqNumberDesc(cafId)
-                    .map(er -> er.getRevertSeqNumber() + 1)
-                    .orElse(1);
-
-            // Resolve initial revert status from node override or bucket definition, default to PENDING
-            String initialRevertStatus = null;
-            if (node != null && node.getData() != null && node.getData().get("pendingRevertStatus") != null) {
-                String val = node.getData().get("pendingRevertStatus").toString().trim();
-                if (!val.isBlank()) {
-                    initialRevertStatus = val;
-                }
-            }
-            if (initialRevertStatus == null) {
-                Optional<Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
-                if (bucketOpt.isPresent() && bucketOpt.get().getPendingRevertStatus() != null && !bucketOpt.get().getPendingRevertStatus().isBlank()) {
-                    initialRevertStatus = bucketOpt.get().getPendingRevertStatus().trim();
-                }
-            }
-            if (initialRevertStatus == null || initialRevertStatus.isBlank()) {
-                initialRevertStatus = "PENDING";
-            }
-
-            EntityRevert er = new EntityRevert();
-            er.setCafId(cafId);
-            er.setWorkflowInstanceId(instanceId);
-            er.setRevertCategory("BUCKET");
-            er.setBucketId(bucketId);
-            er.setEntTypeId(entTypeId);
-            er.setRevertStatus(initialRevertStatus);
-            er.setActive(true);
-            er.setCircleId(circleId);
-            er.setRevertSeqNumber(seqNumber);
-
-            if (context != null) {
-                if (context.containsKey("entPersonId")) {
-                    er.setEntPersonId(String.valueOf(context.get("entPersonId")));
-                }
-                if (context.containsKey("entOrgId")) {
-                    er.setEntOrgId(String.valueOf(context.get("entOrgId")));
-                }
-            }
-
-            entityRevertRepository.save(er);
-            log.info("Created PENDING EntityRevert for cafId={}, bucketId={}, instanceId={}, circleId={}",
-                    cafId, bucketId, instanceId, circleId);
-
-        } catch (Exception e) {
-            log.error("Failed to create PENDING EntityRevert for instanceId={}, bucketId={}: {}",
-                    instanceId, bucketId, e.getMessage(), e);
-        }
-    }
-
-    private Long resolveCafId(String formId, java.util.Map<String, Object> context) {
-        if (context == null && TraversalContextHolder.get() != null) {
-            context = TraversalContextHolder.get().context;
-        }
-        Long cafId = WorkflowContext.from(context).getCafId();
-        if (cafId != null) {
-            return cafId;
-        }
-        return WorkflowContext.parseStrictNumeric(formId);
-    }
-
-    private Integer resolveCircleId(java.util.Map<String, Object> context) {
-        if (context == null && TraversalContextHolder.get() != null) {
-            context = TraversalContextHolder.get().context;
-        }
-        return WorkflowContext.from(context).getCircleId(1);
+        // 6. Delegate domain EntityRevert creation to EntityStatusSyncService
+        entityStatusSyncService.createPendingEntityRevert(instanceId, formId, bucketId, node, context);
     }
 
     // -----------------------------------------------------------------------

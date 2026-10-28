@@ -29,6 +29,12 @@ public class EntityStatusSyncService {
     private CustomerFormRepository customerFormRepository;
 
     @Autowired
+    private com.vi.atlas.workflow.repository.EntityRevertRepository entityRevertRepository;
+
+    @Autowired
+    private com.vi.atlas.workflow.repository.BucketRepository bucketRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     /**
@@ -136,6 +142,103 @@ public class EntityStatusSyncService {
             log.warn(
                     "Generic domain entity update failed for table '{}' (contextId={}, status={}): {}. Workflow execution will continue.",
                     table, contextId, newStatus, e.getMessage());
+        }
+    }
+
+    /**
+     * Creates a PENDING EntityRevert record for telecom review queue pickers (A2, AWCS, etc.)
+     * during bucket suspension.
+     */
+    public void createPendingEntityRevert(String instanceId, String formId, String bucketId,
+                                          com.vi.atlas.common.dto.WorkflowNodeDto node,
+                                          java.util.Map<String, Object> context) {
+        try {
+            WorkflowContext wfCtx = WorkflowContext.from(context);
+            Long cafId = wfCtx.getCafId();
+            if (cafId == null) {
+                cafId = WorkflowContext.parseStrictNumeric(formId);
+            }
+            if (cafId == null) {
+                log.warn("Skipping EntityRevert creation - could not resolve numeric cafId from formId={} or context", formId);
+                return;
+            }
+
+            Integer circleId = wfCtx.getCircleId(1);
+
+            java.util.Optional<com.vi.atlas.workflow.entity.EntityRevert> existingPending = entityRevertRepository
+                    .findByWorkflowInstanceIdAndBucketIdAndRevertStatusAndActiveTrue(instanceId, bucketId, "PENDING");
+            if (existingPending.isPresent()) {
+                log.info("PENDING EntityRevert already exists for bucketId={}, instanceId={}", bucketId, instanceId);
+                return;
+            }
+
+            // Resolve entTypeId from node data override, or bucket definition, or context, fallback to WORKFLOW_ENGINE
+            String entTypeId = null;
+            if (node != null && node.getData() != null && node.getData().get("entTypeId") != null) {
+                String val = node.getData().get("entTypeId").toString().trim();
+                if (!val.isBlank()) {
+                    entTypeId = val;
+                }
+            }
+            if (entTypeId == null) {
+                java.util.Optional<com.vi.atlas.workflow.entity.Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+                if (bucketOpt.isPresent() && bucketOpt.get().getEntTypeId() != null && !bucketOpt.get().getEntTypeId().isBlank()) {
+                    entTypeId = bucketOpt.get().getEntTypeId().trim();
+                }
+            }
+            if (entTypeId == null) {
+                entTypeId = wfCtx.getEntTypeId("WORKFLOW_ENGINE");
+            }
+
+            int seqNumber = entityRevertRepository.findTopByCafIdOrderByRevertSeqNumberDesc(cafId)
+                    .map(er -> er.getRevertSeqNumber() + 1)
+                    .orElse(1);
+
+            // Resolve initial revert status from node override or bucket definition, default to PENDING
+            String initialRevertStatus = null;
+            if (node != null && node.getData() != null && node.getData().get("pendingRevertStatus") != null) {
+                String val = node.getData().get("pendingRevertStatus").toString().trim();
+                if (!val.isBlank()) {
+                    initialRevertStatus = val;
+                }
+            }
+            if (initialRevertStatus == null) {
+                java.util.Optional<com.vi.atlas.workflow.entity.Bucket> bucketOpt = bucketRepository.findByBucketId(bucketId);
+                if (bucketOpt.isPresent() && bucketOpt.get().getPendingRevertStatus() != null && !bucketOpt.get().getPendingRevertStatus().isBlank()) {
+                    initialRevertStatus = bucketOpt.get().getPendingRevertStatus().trim();
+                }
+            }
+            if (initialRevertStatus == null || initialRevertStatus.isBlank()) {
+                initialRevertStatus = "PENDING";
+            }
+
+            com.vi.atlas.workflow.entity.EntityRevert er = new com.vi.atlas.workflow.entity.EntityRevert();
+            er.setCafId(cafId);
+            er.setWorkflowInstanceId(instanceId);
+            er.setRevertCategory("BUCKET");
+            er.setBucketId(bucketId);
+            er.setEntTypeId(entTypeId);
+            er.setRevertStatus(initialRevertStatus);
+            er.setActive(true);
+            er.setCircleId(circleId);
+            er.setRevertSeqNumber(seqNumber);
+
+            if (context != null) {
+                if (context.containsKey("entPersonId")) {
+                    er.setEntPersonId(String.valueOf(context.get("entPersonId")));
+                }
+                if (context.containsKey("entOrgId")) {
+                    er.setEntOrgId(String.valueOf(context.get("entOrgId")));
+                }
+            }
+
+            entityRevertRepository.save(er);
+            log.info("Created PENDING EntityRevert for cafId={}, bucketId={}, instanceId={}, circleId={}",
+                    cafId, bucketId, instanceId, circleId);
+
+        } catch (Exception e) {
+            log.error("Failed to create PENDING EntityRevert for instanceId={}, bucketId={}: {}",
+                    instanceId, bucketId, e.getMessage(), e);
         }
     }
 

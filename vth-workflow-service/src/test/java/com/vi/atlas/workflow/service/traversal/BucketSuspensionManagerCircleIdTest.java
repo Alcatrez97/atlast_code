@@ -44,13 +44,16 @@ public class BucketSuspensionManagerCircleIdTest {
     @InjectMocks
     private BucketSuspensionManager bucketSuspensionManager;
 
+    @InjectMocks
+    private EntityStatusSyncService realEntityStatusSyncService;
+
     @BeforeEach
     public void setUp() {
         MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    public void testEntityRevertCreatedWithSuppliedCircleId() {
+    public void testBucketSuspensionManagerDelegatesToEntityStatusSyncService() {
         String instanceId = "inst-101";
         String formId = "987654";
         String bucketId = "A2";
@@ -66,6 +69,28 @@ public class BucketSuspensionManagerCircleIdTest {
         WorkflowVersion version = new WorkflowVersion();
         version.setWorkflowDefinition(def);
 
+        Map<String, Object> context = new HashMap<>();
+        context.put("cafId", "987654");
+        context.put("circleId", 22);
+
+        bucketSuspensionManager.createBucketRevertStatusAndFormPending(
+                instanceId, formId, bucketId, node, version, context);
+
+        verify(entityStatusSyncService).createPendingEntityRevert(instanceId, formId, bucketId, node, context);
+    }
+
+    @Test
+    public void testEntityStatusSyncServiceCreatesEntityRevertWithSuppliedCircleId() {
+        String instanceId = "inst-101";
+        String formId = "987654";
+        String bucketId = "A2";
+
+        WorkflowNodeDto node = new WorkflowNodeDto();
+        node.setId("bucket-node-1");
+        node.setLabel("A2 Verification");
+        node.setType("BUCKET");
+        node.setData(Map.of("bucketId", bucketId));
+
         Bucket bucket = new Bucket();
         bucket.setBucketId(bucketId);
         bucket.setName("A2 Review");
@@ -80,8 +105,7 @@ public class BucketSuspensionManagerCircleIdTest {
         context.put("cafId", "987654");
         context.put("circleId", 22);
 
-        bucketSuspensionManager.createBucketRevertStatusAndFormPending(
-                instanceId, formId, bucketId, node, version, context);
+        realEntityStatusSyncService.createPendingEntityRevert(instanceId, formId, bucketId, node, context);
 
         ArgumentCaptor<EntityRevert> captor = ArgumentCaptor.forClass(EntityRevert.class);
         verify(entityRevertRepository).save(captor.capture());
@@ -95,7 +119,7 @@ public class BucketSuspensionManagerCircleIdTest {
     }
 
     @Test
-    public void testEntityRevertWithAlternativeCircleIdCasing() {
+    public void testEntityStatusSyncServiceWithAlternativeCircleIdCasing() {
         String instanceId = "inst-102";
         String formId = "987655";
         String bucketId = "AWCS";
@@ -104,11 +128,6 @@ public class BucketSuspensionManagerCircleIdTest {
         node.setId("bucket-node-2");
         node.setType("BUCKET");
         node.setData(Map.of("bucketId", bucketId));
-
-        WorkflowDefinition def = new WorkflowDefinition();
-        def.setKey("order_processing");
-        WorkflowVersion version = new WorkflowVersion();
-        version.setWorkflowDefinition(def);
 
         Bucket bucket = new Bucket();
         bucket.setBucketId(bucketId);
@@ -121,8 +140,7 @@ public class BucketSuspensionManagerCircleIdTest {
         context.put("caf_id", "987655");
         context.put("circle_id", "45");
 
-        bucketSuspensionManager.createBucketRevertStatusAndFormPending(
-                instanceId, formId, bucketId, node, version, context);
+        realEntityStatusSyncService.createPendingEntityRevert(instanceId, formId, bucketId, node, context);
 
         ArgumentCaptor<EntityRevert> captor = ArgumentCaptor.forClass(EntityRevert.class);
         verify(entityRevertRepository).save(captor.capture());
