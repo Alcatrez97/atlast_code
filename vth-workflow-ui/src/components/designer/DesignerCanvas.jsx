@@ -260,6 +260,7 @@ const DesignerCanvasInner = ({ onRefreshWorkflows, onShowNotification, traceMode
         }
         catch (error) {
             onShowNotification(error.message || 'Save failed', 'error');
+            throw error;
         }
         finally {
             setIsSaving(false);

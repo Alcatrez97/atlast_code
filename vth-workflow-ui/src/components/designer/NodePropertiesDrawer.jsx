@@ -74,8 +74,14 @@ const rowsToPayloadMapping = (rows) => {
   const result = {};
   if (!Array.isArray(rows)) return result;
   rows.forEach(r => {
-    const target = (r.targetField || '').trim();
-    const context = (r.contextField || '').trim();
+    let context = (r.contextField || '').trim();
+    let target = (r.targetField || '').trim();
+    if (!target && context) {
+      target = context.replace(/^#?context\./, '').replace(/^#?context\['([^']+)'\]/, '$1').replace(/^#/, '').trim();
+    }
+    if (!context && target) {
+      context = target;
+    }
     if (target && context) {
       result[target] = context;
     }
@@ -251,9 +257,11 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
   const handleMappingRowChange = (index, field, value) => {
     setPayloadMappingRows(prev => {
       const updated = [...prev];
+      const prevContext = updated[index]?.contextField || '';
+      const prevTarget = updated[index]?.targetField || '';
       const currentRow = { ...updated[index], [field]: value };
-      if (field === 'contextField' && !currentRow.targetField) {
-        const cleanField = String(value || '').replace(/^context\./, '').replace(/^context\['([^']+)'\]/, '$1').trim();
+      if (field === 'contextField' && (!prevTarget || prevTarget === prevContext)) {
+        const cleanField = String(value || '').replace(/^#?context\./, '').replace(/^#?context\['([^']+)'\]/, '$1').replace(/^#/, '').trim();
         if (cleanField && !cleanField.includes('(') && !cleanField.includes('+')) {
           currentRow.targetField = cleanField;
         }
@@ -469,6 +477,11 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
           let finalMapping = {};
           if (mappingViewMode === 'table') {
             finalMapping = rowsToPayloadMapping(payloadMappingRows);
+            if (Object.keys(finalMapping).length === 0 && payloadMappingStr && payloadMappingStr.trim() !== '{}') {
+              try {
+                finalMapping = JSON.parse(payloadMappingStr);
+              } catch (_) {}
+            }
           } else {
             try {
               finalMapping = JSON.parse(payloadMappingStr || '{}');
@@ -500,6 +513,9 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       await onSaveNode(node.id, { label, data: updatedData });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    }
+    catch (err) {
+      console.error('Save node failed:', err);
     }
     finally {
       setIsSaving(false);
@@ -1304,11 +1320,14 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                     {/* Kafka Topic */}
                     <Autocomplete
                       freeSolo
+                      clearOnBlur={false}
                       size="small"
                       disabled={isReadOnly}
                       value={kafkaTopic}
-                      onChange={(_, newVal) => setKafkaTopic(newVal || '')}
-                      onInputChange={(_, newVal) => setKafkaTopic(newVal || '')}
+                      onChange={(_, newVal) => setKafkaTopic(typeof newVal === 'string' ? newVal : (newVal || ''))}
+                      onInputChange={(_, newVal, reason) => {
+                        if (reason !== 'reset') setKafkaTopic(newVal || '');
+                      }}
                       options={[
                         ...registeredEvents.map(ev => ev.kafkaTopic).filter(Boolean),
                         'billing-events',
@@ -1329,11 +1348,14 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                     {/* Partition Key */}
                     <Autocomplete
                       freeSolo
+                      clearOnBlur={false}
                       size="small"
                       disabled={isReadOnly}
                       value={kafkaKey}
-                      onChange={(_, newVal) => setKafkaKey(newVal || '')}
-                      onInputChange={(_, newVal) => setKafkaKey(newVal || '')}
+                      onChange={(_, newVal) => setKafkaKey(typeof newVal === 'string' ? newVal : (newVal?.fieldKey || newVal || ''))}
+                      onInputChange={(_, newVal, reason) => {
+                        if (reason !== 'reset') setKafkaKey(newVal || '');
+                      }}
                       options={schemaFields.map(f => f.fieldKey)}
                       renderInput={(params) => (
                         <TextField
@@ -1503,11 +1525,19 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                               {/* Left: Context Field (Source) */}
                               <Autocomplete
                                 freeSolo
+                                clearOnBlur={false}
                                 size="small"
                                 disabled={isReadOnly}
                                 value={row.contextField}
-                                onChange={(_, newVal) => handleMappingRowChange(idx, 'contextField', newVal || '')}
-                                onInputChange={(_, newVal) => handleMappingRowChange(idx, 'contextField', newVal || '')}
+                                onChange={(_, newVal) => {
+                                  const val = typeof newVal === 'string' ? newVal : (newVal?.fieldKey || newVal || '');
+                                  handleMappingRowChange(idx, 'contextField', val);
+                                }}
+                                onInputChange={(_, newVal, reason) => {
+                                  if (reason !== 'reset') {
+                                    handleMappingRowChange(idx, 'contextField', newVal || '');
+                                  }
+                                }}
                                 options={schemaFields.map(f => f.fieldKey)}
                                 renderInput={(params) => (
                                   <TextField
