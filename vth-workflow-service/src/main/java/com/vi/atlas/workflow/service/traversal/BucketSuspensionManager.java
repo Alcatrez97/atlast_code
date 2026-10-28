@@ -57,7 +57,10 @@ public class BucketSuspensionManager {
                                                         String bucketId,
                                                         WorkflowNodeDto node,
                                                         WorkflowVersion version) {
-        createBucketRevertStatusAndFormPending(instanceId, formId, bucketId, node, version, null);
+        java.util.Map<String, Object> fallbackCtx = (TraversalContextHolder.get() != null)
+                ? TraversalContextHolder.get().context
+                : null;
+        createBucketRevertStatusAndFormPending(instanceId, formId, bucketId, node, version, fallbackCtx);
     }
 
     public void createBucketRevertStatusAndFormPending(String instanceId,
@@ -66,10 +69,13 @@ public class BucketSuspensionManager {
                                                         WorkflowNodeDto node,
                                                         WorkflowVersion version,
                                                         java.util.Map<String, Object> context) {
+        if (context == null && TraversalContextHolder.get() != null) {
+            context = TraversalContextHolder.get().context;
+        }
         if (formId == null || formId.isBlank()
                 || instanceId == null || instanceId.isBlank()
                 || bucketId == null || bucketId.isBlank()) {
-            log.warn("Skipping RevertStatus creation â€” missing formId={}, instanceId={}, or bucketId={}",
+            log.warn("Skipping RevertStatus creation — missing formId={}, instanceId={}, or bucketId={}",
                     formId, instanceId, bucketId);
             return;
         }
@@ -157,6 +163,9 @@ public class BucketSuspensionManager {
 
     private void createPendingEntityRevert(String instanceId, String formId, String bucketId, WorkflowNodeDto node, java.util.Map<String, Object> context) {
         try {
+            if (context == null && TraversalContextHolder.get() != null) {
+                context = TraversalContextHolder.get().context;
+            }
             Long cafId = resolveCafId(formId, context);
             if (cafId == null) {
                 log.warn("Skipping EntityRevert creation - could not resolve numeric cafId from formId={} or context", formId);
@@ -246,32 +255,48 @@ public class BucketSuspensionManager {
     }
 
     private Long resolveCafId(String formId, java.util.Map<String, Object> context) {
+        if (context == null && TraversalContextHolder.get() != null) {
+            context = TraversalContextHolder.get().context;
+        }
         if (context != null) {
-            Object cafObj = context.get("cafId");
-            if (cafObj == null) cafObj = context.get("caf_id");
-            if (cafObj == null) cafObj = context.get("businessKey");
-            if (cafObj != null) {
-                try {
-                    return Long.valueOf(cafObj.toString().trim());
-                } catch (NumberFormatException ignored) {}
+            for (String key : new String[] {
+                    "cafId", "caf_id", "cafid", "CafId", "CAF_ID",
+                    "businessKey", "business_key", "formId", "form_id"
+            }) {
+                Object cafObj = context.get(key);
+                if (cafObj != null) {
+                    Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(cafObj);
+                    if (parsed != null) {
+                        return parsed;
+                    }
+                }
             }
         }
         if (formId != null) {
-            try {
-                return Long.valueOf(formId.trim());
-            } catch (NumberFormatException ignored) {}
+            Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(formId);
+            if (parsed != null) {
+                return parsed;
+            }
         }
         return null;
     }
 
     private Integer resolveCircleId(java.util.Map<String, Object> context) {
+        if (context == null && TraversalContextHolder.get() != null) {
+            context = TraversalContextHolder.get().context;
+        }
         if (context != null) {
-            Object circleObj = context.get("circleId");
-            if (circleObj == null) circleObj = context.get("circle_id");
-            if (circleObj != null) {
-                try {
-                    return Integer.valueOf(circleObj.toString().trim());
-                } catch (NumberFormatException ignored) {}
+            for (String key : new String[] {
+                    "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
+                    "circle-id", "circleID", "CircleID", "CIRCLEID"
+            }) {
+                Object circleObj = context.get(key);
+                if (circleObj != null) {
+                    Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(circleObj);
+                    if (parsed != null) {
+                        return parsed.intValue();
+                    }
+                }
             }
         }
         return 1; // Default fallback circle ID

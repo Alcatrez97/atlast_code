@@ -1,10 +1,12 @@
 package com.vi.atlas.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "Inbound execution request payload for executing a workflow key")
 public class ExecutionRequestDto implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -14,6 +16,9 @@ public class ExecutionRequestDto implements Serializable {
 
     @Schema(description = "Business key to correlate this execution (e.g. CAF123, MSISDN99)", example = "CAF123")
     private String businessKey;
+
+    @Schema(description = "Optional circle identifier (e.g. 10)", example = "10")
+    private Object circleId;
 
     @Schema(description = "Flat or nested JSON context map passed into the workflow execution", 
             example = "{\"initial_param\": \"some_value\", \"amount\": 6500, \"birthYear\": 1998, \"currentYear\": 2024}")
@@ -26,6 +31,9 @@ public class ExecutionRequestDto implements Serializable {
 
     public String getBusinessKey() { return businessKey; }
     public void setBusinessKey(String businessKey) { this.businessKey = businessKey; }
+
+    public Object getCircleId() { return circleId; }
+    public void setCircleId(Object circleId) { this.circleId = circleId; }
 
     public Map<String, Object> getContext() { return context; }
     public void setContext(Map<String, Object> context) {

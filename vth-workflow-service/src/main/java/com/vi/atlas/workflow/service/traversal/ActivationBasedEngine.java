@@ -157,7 +157,7 @@ public class ActivationBasedEngine {
                         if (bucketId == null) bucketId = node.getId();
                         outcomeBucketId = bucketId;
 
-                        bucketSuspensionManager.createBucketRevertStatusAndFormPending(instanceId, contextId, bucketId, node, version);
+                        bucketSuspensionManager.createBucketRevertStatusAndFormPending(instanceId, contextId, bucketId, node, version, state.context);
                         eventSubscriptionManager.createEventSubscription(instance, bucketId, node.getId(), Map.of());
 
                         suspended = true;

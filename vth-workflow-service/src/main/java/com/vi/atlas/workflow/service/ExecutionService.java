@@ -165,11 +165,39 @@ public class ExecutionService {
                 ? new HashMap<>(request.getContext())
                 : new HashMap<>();
 
+        // Resolve circleId from context or request
+        Integer circleId = null;
+        for (String cKey : new String[] {
+                "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
+                "circle-id", "circleID", "CircleID", "CIRCLEID"
+        }) {
+            Object cid = context.get(cKey);
+            if (cid != null) {
+                Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(cid);
+                if (parsed != null) {
+                    circleId = parsed.intValue();
+                    break;
+                }
+            }
+        }
+        if (circleId == null && request.getCircleId() != null) {
+            Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(request.getCircleId());
+            if (parsed != null) {
+                circleId = parsed.intValue();
+            }
+        }
+        if (circleId != null) {
+            context.putIfAbsent("circleId", circleId);
+        }
+
         // Create parent WorkflowInstance
         String instanceId = UUID.randomUUID().toString();
         WorkflowInstance instance = new WorkflowInstance();
         instance.setId(instanceId);
         instance.setWorkflowKey(workflowKey);
+        if (circleId != null) {
+            instance.setCircleId(circleId);
+        }
 
         String businessKey = request.getBusinessKey();
         if (businessKey == null || businessKey.isBlank()) {
@@ -243,6 +271,15 @@ public class ExecutionService {
         }
         instance.setBusinessKey(businessKey);
 
+        // Ensure numeric cafId is in context if available
+        if (context.get("cafId") == null) {
+            if (request.getContextId() != null && com.vi.atlas.workflow.entity.CustomerForm.parseCafId(request.getContextId()) != null) {
+                context.put("cafId", request.getContextId());
+            } else if (businessKey != null && com.vi.atlas.workflow.entity.CustomerForm.parseCafId(businessKey) != null) {
+                context.put("cafId", businessKey);
+            }
+        }
+
         log.info("Starting workflow execution. workflowKey={}, version={}, contextId={}, businessKey={}, context={}",
                 workflowKey, version.getVersion(), contextId, businessKey, context);
 
@@ -275,6 +312,9 @@ public class ExecutionService {
         executionLog.setVersionNumber(version.getVersion());
         executionLog.setContextId(contextId);
         executionLog.setInstanceId(instanceId);
+        if (circleId != null) {
+            executionLog.setCircleId(circleId);
+        }
         executionLog.setStartedAt(LocalDateTime.now());
         executionLog.setStatus("RUNNING");
 
@@ -526,6 +566,9 @@ public class ExecutionService {
         executionLog.setVersionNumber(version.getVersion());
         executionLog.setContextId(contextId);
         executionLog.setInstanceId(instanceId);
+        if (instance.getCircleId() != null) {
+            executionLog.setCircleId(instance.getCircleId());
+        }
         executionLog.setStartedAt(LocalDateTime.now());
         executionLog.setStatus("RUNNING");
 

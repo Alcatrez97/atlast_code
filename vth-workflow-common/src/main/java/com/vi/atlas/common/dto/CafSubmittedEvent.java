@@ -1,8 +1,13 @@
 package com.vi.atlas.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CafSubmittedEvent implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -10,7 +15,9 @@ public class CafSubmittedEvent implements Serializable {
     private String contextId;
     private String businessKey;
     private String workflowKey;
+    private Object circleId;
     private Map<String, Object> context;
+    private Map<String, Object> additionalProperties = new HashMap<>();
 
     public CafSubmittedEvent() {}
 
@@ -59,11 +66,32 @@ public class CafSubmittedEvent implements Serializable {
         this.workflowKey = workflowKey;
     }
 
+    public Object getCircleId() {
+        return circleId;
+    }
+
+    public void setCircleId(Object circleId) {
+        this.circleId = circleId;
+    }
+
     public Map<String, Object> getContext() {
         return context;
     }
 
     public void setContext(Map<String, Object> context) {
         this.context = context;
+    }
+
+    @JsonAnySetter
+    public void setAdditionalProperty(String key, Object value) {
+        if (this.additionalProperties == null) {
+            this.additionalProperties = new HashMap<>();
+        }
+        this.additionalProperties.put(key, value);
+    }
+
+    @JsonAnyGetter
+    public Map<String, Object> getAdditionalProperties() {
+        return additionalProperties;
     }
 }
