@@ -64,7 +64,21 @@ public final class CommandUtils {
      */
     @SuppressWarnings("unchecked")
     public static void applyPayloadOrSpelMapping(Object mappingObj, Map<String, Object> input, Map<String, Object> targetMap) {
-        if (!(mappingObj instanceof Map<?, ?> mapping) || input == null || targetMap == null) {
+        if (mappingObj == null || input == null || targetMap == null) {
+            return;
+        }
+
+        Map<?, ?> mapping;
+        if (mappingObj instanceof Map<?, ?> m) {
+            mapping = m;
+        } else if (mappingObj instanceof String s && !s.isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapping = om.readValue(s, Map.class);
+            } catch (Exception e) {
+                return;
+            }
+        } else {
             return;
         }
 
@@ -75,8 +89,23 @@ public final class CommandUtils {
         }
 
         for (Map.Entry<?, ?> entry : mapping.entrySet()) {
-            String targetKey = String.valueOf(entry.getKey());
-            String sourceExpr = String.valueOf(entry.getValue());
+            String targetKey = String.valueOf(entry.getKey()).trim();
+            String sourceExpr = String.valueOf(entry.getValue()).trim();
+
+            if (targetKey.isEmpty()) continue;
+
+            // Auto-detect inverted mapping if key is an expression and value is a target field identifier
+            if ((targetKey.startsWith("context.") || targetKey.startsWith("context[")) &&
+                (!sourceExpr.startsWith("context.") && !sourceExpr.startsWith("context["))) {
+                String temp = targetKey;
+                targetKey = sourceExpr;
+                sourceExpr = temp;
+            }
+
+            if (sourceExpr.startsWith("${") && sourceExpr.endsWith("}")) {
+                sourceExpr = sourceExpr.substring(2, sourceExpr.length() - 1).trim();
+            }
+
             Object value = null;
 
             if (globalContext != null) {

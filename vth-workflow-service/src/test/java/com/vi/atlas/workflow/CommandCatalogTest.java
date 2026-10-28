@@ -14,11 +14,14 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
+})
 @ActiveProfiles("test")
 public class CommandCatalogTest {
 
@@ -63,6 +66,27 @@ public class CommandCatalogTest {
         CommandParameterDto intKeyParam = restDto.getParameters().stream()
                 .filter(p -> "integrationKey".equals(p.getName())).findFirst().orElseThrow();
         assertEquals("INTEGRATIONS", intKeyParam.getDataSource());
+        // Verify parameters exist for MQ (Kafka)
+        CommandMetadataDto mqDto = catalog.stream().filter(c -> "MQ".equals(c.getType())).findFirst().orElseThrow();
+        assertEquals("Publish to Kafka / MQ", mqDto.getDisplayName());
+        assertEquals("Messaging", mqDto.getCategory());
+        List<String> mqParams = mqDto.getParameters().stream().map(CommandParameterDto::getName).toList();
+        assertTrue(mqParams.contains("topic"), "MQ should include topic");
+        assertTrue(mqParams.contains("key"), "MQ should include key");
+        assertTrue(mqParams.contains("consumerGroup"), "MQ should include consumerGroup");
+        assertTrue(mqParams.contains("headers"), "MQ should include headers");
+        assertTrue(mqParams.contains("payloadMapping"), "MQ should include payloadMapping");
+
+        // Verify parameters exist for EMIT_EVENT
+        CommandMetadataDto emitDto = catalog.stream().filter(c -> "EMIT_EVENT".equals(c.getType())).findFirst().orElseThrow();
+        assertEquals("Emit Domain Event", emitDto.getDisplayName());
+        List<String> emitParams = emitDto.getParameters().stream().map(CommandParameterDto::getName).toList();
+        assertTrue(emitParams.contains("eventType"));
+        assertTrue(emitParams.contains("topic"));
+        assertTrue(emitParams.contains("key"));
+        assertTrue(emitParams.contains("consumerGroup"));
+        assertTrue(emitParams.contains("headers"));
+        assertTrue(emitParams.contains("payloadMapping"));
     }
 
     @Test
@@ -78,6 +102,39 @@ public class CommandCatalogTest {
         Optional<WorkflowCommand> kafkaCmd = commandRegistry.getCommand("KAFKA");
         assertTrue(kafkaCmd.isPresent());
         assertEquals("MQ", kafkaCmd.get().getCommandType());
+
+        Optional<WorkflowCommand> mqPublishCmd = commandRegistry.getCommand("MQ_PUBLISH");
+        assertTrue(mqPublishCmd.isPresent());
+        assertEquals("MQ", mqPublishCmd.get().getCommandType());
+    }
+
+    @Test
+    public void testMqPublishCommandExecutionWithPayloadMappingAndHeaders() throws Exception {
+        WorkflowCommand mqCommand = commandRegistry.getCommand("MQ").orElseThrow();
+
+        Map<String, Object> context = new HashMap<>();
+        context.put("cafId", "CAF_TEST_999");
+        context.put("circleId", 101);
+        context.put("mobileNo", "9876543210");
+
+        Map<String, Object> payloadMapping = new HashMap<>();
+        payloadMapping.put("targetCafId", "cafId");
+        payloadMapping.put("targetCircle", "context.circleId");
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("topic", "test-kafka-topic");
+        input.put("key", "${context.cafId}");
+        input.put("consumerGroup", "test-consumer-group");
+        input.put("headers", "{\"X-Trace-Id\": \"TRC-100\"}");
+        input.put("payloadMapping", payloadMapping);
+        input.put("_context", context);
+
+        Map<String, Object> result = mqCommand.execute(input);
+        assertNotNull(result);
+        assertEquals("PUBLISHED", result.get("status"));
+        assertEquals("test-kafka-topic", result.get("topic"));
+        assertEquals("CAF_TEST_999", result.get("key"));
+        assertEquals("test-consumer-group", result.get("consumerGroup"));
     }
 
     @Test

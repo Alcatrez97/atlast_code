@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, Box, Typography, IconButton, Divider, TextField, Button, Chip, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Tooltip, Paper, Switch, FormControlLabel } from '@mui/material';
+import {
+  Drawer, Box, Typography, IconButton, Divider, TextField, Button, Chip,
+  CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem,
+  Tooltip, Paper, Switch, FormControlLabel, Autocomplete
+} from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import InfoIcon from '@mui/icons-material/Info';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import CodeIcon from '@mui/icons-material/Code';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 import { useWorkflowStore } from '../../store/workflowStore.js';
 import './designer.css';
 const NODE_TYPE_COLORS = {
@@ -26,6 +36,51 @@ const isValidJson = (str) => {
   } catch (e) {
     return false;
   }
+};
+
+const parsePayloadMappingToRows = (raw) => {
+  if (!raw) return [];
+  let obj = raw;
+  if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw);
+    } catch (_) {
+      return [];
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return [];
+  const rows = [];
+  let idx = 0;
+  Object.entries(obj).forEach(([key, val]) => {
+    let contextField = String(val ?? '');
+    let targetField = String(key ?? '');
+    // Inverted check: if key is context.xxx or context['xxx'] and val is plain
+    if ((targetField.startsWith('context.') || targetField.startsWith('context[')) &&
+        (!contextField.startsWith('context.') && !contextField.startsWith('context['))) {
+      const tmp = contextField;
+      contextField = targetField;
+      targetField = tmp;
+    }
+    rows.push({
+      id: `row-${Date.now()}-${idx++}-${Math.random().toString(36).substring(2, 6)}`,
+      contextField,
+      targetField
+    });
+  });
+  return rows;
+};
+
+const rowsToPayloadMapping = (rows) => {
+  const result = {};
+  if (!Array.isArray(rows)) return result;
+  rows.forEach(r => {
+    const target = (r.targetField || '').trim();
+    const context = (r.contextField || '').trim();
+    if (target && context) {
+      result[target] = context;
+    }
+  });
+  return result;
 };
 
 export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClose, onSaveNode, onDeleteNode }) => {
@@ -73,6 +128,14 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
   const [restHeadersStr, setRestHeadersStr] = useState('{}');
   const [restTimeout, setRestTimeout] = useState(10);
   const [commandParams, setCommandParams] = useState({});
+
+  // Kafka / Event Emission specific states
+  const [kafkaTopic, setKafkaTopic] = useState('');
+  const [kafkaKey, setKafkaKey] = useState('');
+  const [kafkaConsumerGroup, setKafkaConsumerGroup] = useState('');
+  const [kafkaHeadersStr, setKafkaHeadersStr] = useState('{}');
+  const [payloadMappingRows, setPayloadMappingRows] = useState([]);
+  const [mappingViewMode, setMappingViewMode] = useState('table'); // 'table' | 'json'
 
   // Fetch schema fields, registered buckets, and registered rules when drawer opens
   useEffect(() => {
@@ -158,6 +221,19 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       // Initialize dynamic command params
       setCommandParams(node.data || {});
 
+      // Initialize Kafka / Event Emission properties
+      const kTopic = node.data?.topic || node.data?.kafkaTopic || '';
+      setKafkaTopic(kTopic);
+      setKafkaKey(node.data?.key || node.data?.partitionKey || '');
+      setKafkaConsumerGroup(node.data?.consumerGroup || node.data?.targetGroup || node.data?.targetConsumerGroup || '');
+      setKafkaHeadersStr(node.data?.headers ? (typeof node.data.headers === 'string' ? node.data.headers : JSON.stringify(node.data.headers, null, 2)) : '{}');
+
+      const rawMapping = node.data?.payloadMapping || node.data?.inputMapping || {};
+      const parsedRows = parsePayloadMappingToRows(rawMapping);
+      setPayloadMappingRows(parsedRows);
+      setPayloadMappingStr(typeof rawMapping === 'string' ? rawMapping : JSON.stringify(rawMapping, null, 2));
+      setMappingViewMode('table');
+
       // Determine idempotency from node data or fallback to safe node-type defaults
       if (node.data?.isIdempotent !== undefined) {
         setIsIdempotent(Boolean(node.data.isIdempotent));
@@ -170,6 +246,75 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
       setSaved(false);
     }
   }, [node]);
+
+  // Payload mapping table handlers
+  const handleMappingRowChange = (index, field, value) => {
+    setPayloadMappingRows(prev => {
+      const updated = [...prev];
+      const currentRow = { ...updated[index], [field]: value };
+      if (field === 'contextField' && !currentRow.targetField) {
+        const cleanField = String(value || '').replace(/^context\./, '').replace(/^context\['([^']+)'\]/, '$1').trim();
+        if (cleanField && !cleanField.includes('(') && !cleanField.includes('+')) {
+          currentRow.targetField = cleanField;
+        }
+      }
+      updated[index] = currentRow;
+      const mappingObj = rowsToPayloadMapping(updated);
+      setPayloadMappingStr(JSON.stringify(mappingObj, null, 2));
+      setInputMappingStr(JSON.stringify(mappingObj, null, 2));
+      return updated;
+    });
+  };
+
+  const handleAddMappingRow = () => {
+    setPayloadMappingRows(prev => [
+      ...prev,
+      { id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, contextField: '', targetField: '' }
+    ]);
+  };
+
+  const handleRemoveMappingRow = (index) => {
+    setPayloadMappingRows(prev => {
+      const updated = prev.filter((_, idx) => idx !== index);
+      const mappingObj = rowsToPayloadMapping(updated);
+      setPayloadMappingStr(JSON.stringify(mappingObj, null, 2));
+      setInputMappingStr(JSON.stringify(mappingObj, null, 2));
+      return updated;
+    });
+  };
+
+  const handleAutoMapFromContext = () => {
+    if (!schemaFields || schemaFields.length === 0) {
+      alert('No context schema fields available for this workflow. Add fields in Context Schema first or enter mappings manually.');
+      return;
+    }
+    const newRows = schemaFields.map((f, idx) => ({
+      id: `auto-${idx}-${Date.now()}`,
+      contextField: f.fieldKey,
+      targetField: f.fieldKey
+    }));
+    setPayloadMappingRows(newRows);
+    const mappingObj = rowsToPayloadMapping(newRows);
+    setPayloadMappingStr(JSON.stringify(mappingObj, null, 2));
+    setInputMappingStr(JSON.stringify(mappingObj, null, 2));
+  };
+
+  const handleClearMappingRows = () => {
+    setPayloadMappingRows([]);
+    setPayloadMappingStr('{}');
+    setInputMappingStr('{}');
+  };
+
+  const handleRawMappingJsonChange = (val) => {
+    setPayloadMappingStr(val);
+    setInputMappingStr(val);
+    if (isValidJson(val)) {
+      try {
+        const parsed = JSON.parse(val);
+        setPayloadMappingRows(parsePayloadMappingToRows(parsed));
+      } catch (_) {}
+    }
+  };
   const nodeType = node?.type?.toUpperCase() || '';
   const accentColor = NODE_TYPE_COLORS[nodeType] || '#6366f1';
   const handleSave = async () => {
@@ -284,17 +429,57 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
             return;
           }
         }
-        else if (commandType === 'EMIT_EVENT' || commandType === 'PUBLISH_EVENT') {
-          updatedData.eventType = eventType;
-          updatedData.eventKey = eventType;
-          try {
-            updatedData.payloadMapping = JSON.parse(inputMappingStr || '{}');
+        else if (['EMIT_EVENT', 'PUBLISH_EVENT', 'MQ', 'KAFKA', 'MQ_PUBLISH'].includes(commandType)) {
+          if (commandType === 'EMIT_EVENT' || commandType === 'PUBLISH_EVENT') {
+            updatedData.eventType = eventType;
+            updatedData.eventKey = eventType;
           }
-          catch (e) {
-            alert('Invalid JSON in Payload Mapping');
-            setIsSaving(false);
-            return;
+          if (kafkaTopic.trim()) {
+            updatedData.topic = kafkaTopic.trim();
+            updatedData.kafkaTopic = kafkaTopic.trim();
+          } else {
+            delete updatedData.topic;
+            delete updatedData.kafkaTopic;
           }
+          if (kafkaKey.trim()) {
+            updatedData.key = kafkaKey.trim();
+            updatedData.partitionKey = kafkaKey.trim();
+          } else {
+            delete updatedData.key;
+            delete updatedData.partitionKey;
+          }
+          if (kafkaConsumerGroup.trim()) {
+            updatedData.consumerGroup = kafkaConsumerGroup.trim();
+          } else {
+            delete updatedData.consumerGroup;
+          }
+
+          if (kafkaHeadersStr && kafkaHeadersStr.trim()) {
+            try {
+              updatedData.headers = JSON.parse(kafkaHeadersStr);
+            } catch (e) {
+              alert('Invalid JSON in Kafka Headers / Metadata');
+              setIsSaving(false);
+              return;
+            }
+          } else {
+            delete updatedData.headers;
+          }
+
+          let finalMapping = {};
+          if (mappingViewMode === 'table') {
+            finalMapping = rowsToPayloadMapping(payloadMappingRows);
+          } else {
+            try {
+              finalMapping = JSON.parse(payloadMappingStr || '{}');
+            } catch (e) {
+              alert('Invalid JSON in Payload Mapping');
+              setIsSaving(false);
+              return;
+            }
+          }
+          updatedData.payloadMapping = finalMapping;
+          updatedData.inputMapping = finalMapping;
         }
         else {
           // Dynamic command parameters (e.g. FINALIZE_CAF_SUBMISSION, MQ, etc.)
@@ -1052,24 +1237,400 @@ export const NodePropertiesDrawer = ({ open, node, isReadOnly, traceStep, onClos
                   <TextField fullWidth size="small" label="Output Mapping (JSON)" value={outputMappingStr} onChange={(e) => setOutputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={3} placeholder={`{\n  "childVar": "parentVar"\n}`} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} />
                 </>)}
 
-                {/* 5. EMIT_EVENT */}
-                {(commandType === 'EMIT_EVENT' || commandType === 'PUBLISH_EVENT') && (<>
-                  {registeredEvents.length > 0 && !isReadOnly ? (<FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-                    <InputLabel sx={{ fontSize: '12px' }}>Event Key</InputLabel>
-                    <Select label="Event Key" value={eventType} onChange={(e) => setEventType(e.target.value)} sx={{ fontSize: '12px' }}>
-                      {registeredEvents.map(ev => (<MenuItem key={ev.id} value={ev.eventKey} sx={{ fontSize: '12px' }}>
-                        {ev.name} ({ev.eventKey})
-                      </MenuItem>))}
-                    </Select>
-                  </FormControl>) : (<TextField fullWidth size="small" label="Event Key" value={eventType} onChange={(e) => setEventType(e.target.value)} disabled={isReadOnly} placeholder="PAYMENT_RECEIVED" sx={{ mb: 1.5 }} />)}
-                  <TextField fullWidth size="small" label="Payload Mapping (JSON)" value={inputMappingStr} onChange={(e) => setInputMappingStr(e.target.value)} disabled={isReadOnly} multiline rows={4} placeholder={`{\n  "context['amount']": "amount",\n  "context.status": "status"\n}`} helperText={!isReadOnly ? "JSON mapping parent context SpEL expressions to outbound event payload keys" : undefined} slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }} sx={{ mb: 1.5 }} />
-                </>)}
+                {/* 5. KAFKA & EVENT EMISSION (EMIT_EVENT, PUBLISH_EVENT, MQ, KAFKA, MQ_PUBLISH) */}
+                {['EMIT_EVENT', 'PUBLISH_EVENT', 'MQ', 'KAFKA', 'MQ_PUBLISH'].includes(commandType) && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
+                    {/* Header info banner */}
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1.25,
+                      borderRadius: 1.5,
+                      bgcolor: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)'
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DataObjectIcon sx={{ fontSize: 18, color: '#38bdf8' }} />
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Kafka Event & Messaging Configuration
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={['EMIT_EVENT', 'PUBLISH_EVENT'].includes(commandType) ? 'Domain Event' : 'Kafka Producer'}
+                        size="small"
+                        sx={{ height: 18, fontSize: '9px', fontWeight: 700, bgcolor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}
+                      />
+                    </Box>
 
-                {/* 6. Dynamic Parameter Renderer for any other Backend Commands (e.g. FINALIZE_CAF_SUBMISSION, MQ, Custom) */}
+                    {/* Event Type selector for EMIT_EVENT / PUBLISH_EVENT */}
+                    {['EMIT_EVENT', 'PUBLISH_EVENT'].includes(commandType) && (
+                      registeredEvents.length > 0 && !isReadOnly ? (
+                        <FormControl fullWidth size="small">
+                          <InputLabel sx={{ fontSize: '12px' }}>Event Key / Type *</InputLabel>
+                          <Select
+                            label="Event Key / Type *"
+                            value={eventType}
+                            onChange={(e) => {
+                              const selKey = e.target.value;
+                              setEventType(selKey);
+                              const found = registeredEvents.find(ev => ev.eventKey === selKey);
+                              if (found?.kafkaTopic && !kafkaTopic) {
+                                setKafkaTopic(found.kafkaTopic);
+                              }
+                            }}
+                            sx={{ fontSize: '12px' }}
+                          >
+                            {registeredEvents.map(ev => (
+                              <MenuItem key={ev.id} value={ev.eventKey} sx={{ fontSize: '12px' }}>
+                                {ev.name} ({ev.eventKey}) {ev.kafkaTopic ? `→ [${ev.kafkaTopic}]` : ''}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ) : (
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Event Key / Type *"
+                          value={eventType}
+                          onChange={(e) => setEventType(e.target.value)}
+                          disabled={isReadOnly}
+                          placeholder="PAYMENT_RECEIVED"
+                        />
+                      )
+                    )}
+
+                    {/* Kafka Topic */}
+                    <Autocomplete
+                      freeSolo
+                      size="small"
+                      disabled={isReadOnly}
+                      value={kafkaTopic}
+                      onChange={(_, newVal) => setKafkaTopic(newVal || '')}
+                      onInputChange={(_, newVal) => setKafkaTopic(newVal || '')}
+                      options={[
+                        ...registeredEvents.map(ev => ev.kafkaTopic).filter(Boolean),
+                        'billing-events',
+                        'customer-notifications',
+                        'caf-submitted-events',
+                        'workflow-events'
+                      ].filter((v, i, a) => a.indexOf(v) === i)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label={['MQ', 'KAFKA', 'MQ_PUBLISH'].includes(commandType) ? 'Kafka Topic *' : 'Kafka Topic (Optional)'}
+                          placeholder="e.g. billing-events-topic"
+                          helperText="Target Apache Kafka topic name"
+                        />
+                      )}
+                    />
+
+                    {/* Partition Key */}
+                    <Autocomplete
+                      freeSolo
+                      size="small"
+                      disabled={isReadOnly}
+                      value={kafkaKey}
+                      onChange={(_, newVal) => setKafkaKey(newVal || '')}
+                      onInputChange={(_, newVal) => setKafkaKey(newVal || '')}
+                      options={schemaFields.map(f => f.fieldKey)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Partition Key (Optional)"
+                          placeholder="e.g. cafId or ${context.cafId}"
+                          helperText="Distributes events across Kafka topic partitions (select context field or type expression)"
+                        />
+                      )}
+                    />
+
+                    {/* Consumer Group / Target Listener */}
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Consumer Group / Target Listener (Optional)"
+                      value={kafkaConsumerGroup}
+                      onChange={(e) => setKafkaConsumerGroup(e.target.value)}
+                      disabled={isReadOnly}
+                      placeholder="e.g. billing-processing-group, crm-sync-listener"
+                      helperText="Attached to message metadata/headers for downstream routing or listener grouping"
+                    />
+
+                    {/* Kafka Headers & Metadata */}
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: 1.5,
+                        bgcolor: 'rgba(255, 255, 255, 0.02)',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <Box sx={{ p: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Kafka Headers / Metadata (JSON)
+                        </Typography>
+                        <Chip label="Optional" size="small" sx={{ height: 16, fontSize: '8px' }} />
+                      </Box>
+                      <Box sx={{ p: 1.25 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={kafkaHeadersStr}
+                          onChange={(e) => setKafkaHeadersStr(e.target.value)}
+                          disabled={isReadOnly}
+                          multiline
+                          rows={2}
+                          placeholder={`{\n  "X-Source": "state-machine-engine",\n  "traceId": "TRC-001"\n}`}
+                          slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }}
+                        />
+                      </Box>
+                    </Paper>
+
+                    {/* OUTGOING PAYLOAD MAPPING SECTION */}
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                        borderRadius: 2,
+                        bgcolor: 'rgba(56, 189, 248, 0.02)',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Mapping Header Bar with View Switcher */}
+                      <Box sx={{
+                        p: 1.25,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                        bgcolor: 'rgba(255, 255, 255, 0.02)'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <TableChartIcon sx={{ fontSize: 16, color: '#38bdf8' }} />
+                          <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: 0.5 }}>
+                            OUTGOING PAYLOAD MAPPING
+                          </Typography>
+                          <Chip
+                            label={`${payloadMappingRows.length} field${payloadMappingRows.length === 1 ? '' : 's'}`}
+                            size="small"
+                            sx={{ height: 16, fontSize: '9px', fontWeight: 700, bgcolor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}
+                          />
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Button
+                            size="small"
+                            variant={mappingViewMode === 'table' ? 'contained' : 'text'}
+                            onClick={() => setMappingViewMode('table')}
+                            sx={{
+                              minWidth: 0,
+                              px: 1,
+                              py: 0.25,
+                              fontSize: '10px',
+                              height: 22,
+                              bgcolor: mappingViewMode === 'table' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                              color: mappingViewMode === 'table' ? '#38bdf8' : 'text.secondary',
+                              boxShadow: 'none',
+                              '&:hover': { bgcolor: 'rgba(56, 189, 248, 0.35)' }
+                            }}
+                            startIcon={<TableChartIcon sx={{ fontSize: 12 }} />}
+                          >
+                            Table
+                          </Button>
+                          <Button
+                            size="small"
+                            variant={mappingViewMode === 'json' ? 'contained' : 'text'}
+                            onClick={() => setMappingViewMode('json')}
+                            sx={{
+                              minWidth: 0,
+                              px: 1,
+                              py: 0.25,
+                              fontSize: '10px',
+                              height: 22,
+                              bgcolor: mappingViewMode === 'json' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                              color: mappingViewMode === 'json' ? '#38bdf8' : 'text.secondary',
+                              boxShadow: 'none',
+                              '&:hover': { bgcolor: 'rgba(56, 189, 248, 0.35)' }
+                            }}
+                            startIcon={<CodeIcon sx={{ fontSize: 12 }} />}
+                          >
+                            JSON
+                          </Button>
+                        </Box>
+                      </Box>
+
+                      {/* Mode A: Table Mapping View */}
+                      {mappingViewMode === 'table' ? (
+                        <Box sx={{ p: 1.25 }}>
+                          {payloadMappingRows.length > 0 && (
+                            <Box sx={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 24px 1fr 32px',
+                              gap: 1,
+                              alignItems: 'center',
+                              mb: 1,
+                              px: 0.5
+                            }}>
+                              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', fontSize: '10px', textTransform: 'uppercase' }}>
+                                Context Field (Source)
+                              </Typography>
+                              <Box />
+                              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', fontSize: '10px', textTransform: 'uppercase' }}>
+                                Outgoing Payload (Target)
+                              </Typography>
+                              <Box />
+                            </Box>
+                          )}
+
+                          {payloadMappingRows.map((row, idx) => (
+                            <Box
+                              key={row.id || idx}
+                              sx={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 24px 1fr 32px',
+                                gap: 1,
+                                alignItems: 'center',
+                                mb: 1,
+                                p: 0.75,
+                                borderRadius: 1,
+                                bgcolor: 'rgba(255, 255, 255, 0.02)',
+                                border: '1px solid rgba(255, 255, 255, 0.06)',
+                                '&:hover': { border: '1px solid rgba(56, 189, 248, 0.3)', bgcolor: 'rgba(56, 189, 248, 0.03)' }
+                              }}
+                            >
+                              {/* Left: Context Field (Source) */}
+                              <Autocomplete
+                                freeSolo
+                                size="small"
+                                disabled={isReadOnly}
+                                value={row.contextField}
+                                onChange={(_, newVal) => handleMappingRowChange(idx, 'contextField', newVal || '')}
+                                onInputChange={(_, newVal) => handleMappingRowChange(idx, 'contextField', newVal || '')}
+                                options={schemaFields.map(f => f.fieldKey)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    placeholder="e.g. cafId or context.cafId"
+                                    slotProps={{ input: { ...params.InputProps, sx: { fontSize: '11px', fontFamily: 'monospace' } } }}
+                                  />
+                                )}
+                              />
+
+                              {/* Center: Arrow Icon */}
+                              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                <ArrowForwardIcon sx={{ fontSize: 14, color: '#38bdf8', opacity: 0.7 }} />
+                              </Box>
+
+                              {/* Right: Outgoing Payload Field (Target) */}
+                              <TextField
+                                size="small"
+                                disabled={isReadOnly}
+                                value={row.targetField}
+                                onChange={(e) => handleMappingRowChange(idx, 'targetField', e.target.value)}
+                                placeholder="e.g. cafId, amount"
+                                slotProps={{ input: { sx: { fontSize: '11px', fontFamily: 'monospace' } } }}
+                              />
+
+                              {/* Action: Delete Row */}
+                              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                <IconButton
+                                  size="small"
+                                  disabled={isReadOnly}
+                                  onClick={() => handleRemoveMappingRow(idx)}
+                                  sx={{ color: 'text.secondary', '&:hover': { color: '#ef4444' } }}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Box>
+                            </Box>
+                          ))}
+
+                          {payloadMappingRows.length === 0 && (
+                            <Box sx={{
+                              py: 2.5,
+                              px: 1.5,
+                              textAlign: 'center',
+                              borderRadius: 1.5,
+                              border: '1px dashed rgba(255, 255, 255, 0.12)',
+                              bgcolor: 'rgba(255, 255, 255, 0.01)',
+                              mb: 1
+                            }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                                No outgoing payload mappings configured.
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '10px', display: 'block' }}>
+                                By default, the full workflow context will be included in the Kafka message.
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {/* Toolbar Actions */}
+                          {!isReadOnly && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1, alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<AddIcon sx={{ fontSize: 14 }} />}
+                                  onClick={handleAddMappingRow}
+                                  sx={{ fontSize: '11px', textTransform: 'none', borderColor: 'rgba(56, 189, 248, 0.35)', color: '#38bdf8', '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' } }}
+                                >
+                                  Add Field
+                                </Button>
+                                {schemaFields.length > 0 && (
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    startIcon={<AutoFixHighIcon sx={{ fontSize: 14 }} />}
+                                    onClick={handleAutoMapFromContext}
+                                    sx={{ fontSize: '11px', textTransform: 'none', color: '#10b981', '&:hover': { bgcolor: 'rgba(16, 185, 129, 0.08)' } }}
+                                  >
+                                    Auto-Map All Context Fields
+                                  </Button>
+                                )}
+                              </Box>
+
+                              {payloadMappingRows.length > 0 && (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={handleClearMappingRows}
+                                  sx={{ fontSize: '10px', textTransform: 'none', color: 'text.secondary', '&:hover': { color: '#ef4444' } }}
+                                >
+                                  Clear All
+                                </Button>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                      ) : (
+                        /* Mode B: Raw JSON / SpEL View */
+                        <Box sx={{ p: 1.25 }}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={payloadMappingStr}
+                            onChange={(e) => handleRawMappingJsonChange(e.target.value)}
+                            disabled={isReadOnly}
+                            multiline
+                            rows={5}
+                            placeholder={`{\n  "outgoingField": "context.sourceField",\n  "cafId": "cafId"\n}`}
+                            helperText={!isReadOnly ? "JSON mapping outgoing payload target keys to context variables or SpEL expressions" : undefined}
+                            slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '11px' } } }}
+                          />
+                        </Box>
+                      )}
+                    </Paper>
+                  </Box>
+                )}
+
+                {/* 6. Dynamic Parameter Renderer for any other Backend Commands (e.g. FINALIZE_CAF_SUBMISSION, Custom) */}
                 {(() => {
                   const meta = availableCommands.find(c => c.type === commandType);
                   if (!meta || !meta.parameters || meta.parameters.length === 0) return null;
-                  if (['REST', 'CALL_EXTERNAL_SYSTEM', 'HTTP', 'CREATE_BUCKET', 'UPDATE_FORM_STATUS', 'START_CHILD_WORKFLOW', 'START_WORKFLOW', 'EMIT_EVENT', 'PUBLISH_EVENT'].includes(commandType)) {
+                  if (['REST', 'CALL_EXTERNAL_SYSTEM', 'HTTP', 'CREATE_BUCKET', 'UPDATE_FORM_STATUS', 'START_CHILD_WORKFLOW', 'START_WORKFLOW', 'EMIT_EVENT', 'PUBLISH_EVENT', 'MQ', 'KAFKA', 'MQ_PUBLISH'].includes(commandType)) {
                     return null;
                   }
 
