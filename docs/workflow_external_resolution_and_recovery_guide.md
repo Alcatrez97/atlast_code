@@ -189,17 +189,17 @@ EOF
 ```
 
 #### Engine Behavior (`KafkaEventListener.java`):
-1. Detects that `instanceId` is not provided.
-2. Automatically looks up the active instance:
-   ```java
-   String key = event.getBusinessKey() != null ? event.getBusinessKey() : event.getCafId();
-   String instanceId = workflowInstanceRepository
-           .findFirstByBusinessKeyOrderByCreatedAtDesc(key)
-           .map(WorkflowInstance::getId)
-           .orElseThrow(() -> new IllegalArgumentException("No workflow found for cafId: " + key));
-   ```
-3. Delegates to `BucketResolutionService.resolveBucket(instanceId, bucketId, outcome, resolvedBy, notes)`.
-4. Updates `POSTPAID_ONBOARD_CAF`, marks audit rows `COMPLETED`, and advances the workflow.
+1. **Detects whether `instanceId` is absent**: External approval systems are not required to know or transmit internal engine UUIDs.
+2. **Multi-tier Active Instance Resolution**:
+   - **Step 1 (`EntityRevert`)**: Queries `entityRevertRepository.findByCafId(cafId)` for active non-completed/non-reverted records matching `bucketId`.
+   - **Step 2 (`WorkflowInstance`)**: Queries `workflowInstanceRepository.findFirstByBusinessKeyAndStatusOrderByCreatedAtDesc(businessKey, WAITING)` targeting instances currently suspended.
+   - **Step 3 (`RevertStatus`)**: Queries `revertStatusRepository.findByFormIdOrderByCreatedAtDesc(businessKey)` matching `PENDING` bucket steps.
+3. **Auto-Detection of `bucketId`**: If the external system omits `bucketId`, the engine checks `BucketExecutionRepository.findByWorkflowInstanceId(instanceId)` to resolve the active pending bucket.
+4. **Telecom Status Prefix Normalization**: Accepts either `outcome` or domain `status` (e.g. `"status": "A2Accept"`). The engine automatically strips bucket prefixes (e.g., `A2Accept` $\rightarrow$ `Accept`) so transition edges evaluate cleanly without transformation scripts.
+5. **Delegates to `BucketResolutionService.resolveBucket(instanceId, bucketId, outcome, resolvedBy, notes)`**:
+   - Updates `POSTPAID_ONBOARD_CAF` where `caf_id = ...`.
+   - Synchronizes `postpaid_entity_revert` and `postpaid_workflow_revert_status` to `COMPLETED` (or `REVERTED`).
+   - Resumes graph traversal in `ActivationBasedEngine`.
 
 ---
 

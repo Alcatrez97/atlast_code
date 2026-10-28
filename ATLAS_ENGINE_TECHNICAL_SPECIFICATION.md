@@ -12,11 +12,11 @@ The **Atlas Workflow & Decision Platform** (`vth-workflow-service` / `vth-workfl
 ### Foundational Principles:
 1. **Java 21+ Virtual Threads (Project Loom)**: Replaces traditional thread pools with lightweight virtual threads (`Executors.newVirtualThreadPerTaskExecutor()`). Long-running wait states or external I/O operations do not block operating system platform threads.
 2. **Zero Engine-UUID Leaks to External Systems (Domain-Key Correlation)**: External systems (Kafka producers, document scanners, payment gateways) interact using domain identifiers (**`businessKey`**, e.g., `CAF12345`, `trackingId`, `orderId`). They never know or store internal workflow engine UUIDs.
-3. **Dual Execution Engine Paradigms**:
-   - **`ActivationBasedEngine`**: A Petri-net/token activation model designed for structural DAGs with parallel splits, asynchronous forks, and join convergences (`AND` / `OR`).
-   - **`SequentialEngine`**: A depth-first traversal engine designed for strictly linear or tree-based pipelines.
+3. **Unified Execution Engine (`ActivationBasedEngine`)**:
+   - All workflow graph topologies—whether strictly linear pipelines, conditional branches, asynchronous wait states, or parallel forks (`FORK`/`JOIN`)—run deterministically through a single unified Petri-net/activation frontier engine. This eliminates dual-engine drift and ensures consistent state handling across all workflow patterns.
 4. **Compile-Once, Traverse-Fast Graph Caching**: Raw JSON workflow definitions are compiled into memory-efficient, indexed graph topologies (`CompiledWorkflowGraph`) containing pre-indexed outgoing/incoming edge lookups, topological sorting, and pre-parsed SpEL expressions.
 5. **Decoupled Vertical Partitioning**: High-frequency summary telemetry (`workflow_execution_logs`) is physically separated from heavy payload dumps (`workflow_execution_log_details` storing megabyte-scale JSON traces and input contexts in dedicated CLOB partitions) to protect query throughput.
+6. **Canonical Context Normalizer (`WorkflowContext`)**: Incoming triggers from REST, Kafka, and SpEL are normalized into canonical keys (`cafId`, `circleId`, `businessKey`, `formId`). A stack-backed `TraversalContextHolder` (`InheritableThreadLocal<Deque<TraversalContext>>`) guarantees zero context loss or leakage across nested or re-entrant executions.
 
 ---
 
@@ -144,13 +144,12 @@ All tables share the prefix `workflow_` to prevent namespace collisions in enter
                   |  CompiledWorkflowGraph (Cache)    |
                   +-----------------+-----------------+
                                     |
-                    +---------------+---------------+
-                    | (Fork to Virtual Thread)      |
-                    v                               v
-        +-----------------------+       +-----------------------+
-        | SequentialEngine      |       | ActivationBasedEngine |
-        | (Linear / Tree Flows) |       | (DAG / Parallel Fork) |
-        +-----------------------+       +-----------------------+
+                                    | (Execute on Project Loom Virtual Thread)
+                                    v
+                        +-----------------------+
+                        | ActivationBasedEngine |
+                        | (Unified DAG & Linear)|
+                        +-----------------------+
 ```
 
 ### Graph Compilation & Memory Topology
@@ -290,7 +289,7 @@ Workflow context is stored as a nested key-value map (`Map<String, Object>`).
   * `#context['lastOutcome'] == 'APPROVED'`
   * `#context['docsReady'] && #context['cafReady']`
 * Edge conditions with blank/null expressions default to unconditional `true`.
-* If multiple outgoing conditional edges evaluate to `true`, `ActivationBasedEngine` treats them as parallel paths, whereas `SequentialEngine` follows the first matching edge.
+* If multiple outgoing conditional edges evaluate to `true`, `ActivationBasedEngine` evaluates and activates all matching target branches in parallel.
 
 ---
 

@@ -216,13 +216,14 @@ Once manual verification, document check, or external evaluation is complete, th
 ### Option A: Via Kafka (`workflow-bucket-resolution` topic)
 ```json
 {
-  "businessKey": "1004829",
+  "cafId": 1004829,
   "bucketId": "A2",
   "outcome": "Accept",
   "resolvedBy": "Agent_Bob",
   "resolutionNotes": "All documents verified and approved"
 }
 ```
+*(Note: External systems do not need internal `instanceId`. You can provide numeric `cafId` or string `businessKey`. If domain status like `"status": "A2Accept"` is supplied instead of `outcome`, the engine automatically strips the bucket prefix).*
 
 ### Option B: Via REST API
 ```bash
