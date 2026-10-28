@@ -41,7 +41,6 @@ public class GraphTraversalEngine {
     @Autowired private WorkflowInstanceRepository instanceRepository;
     @Autowired private CommandRegistry          commandRegistry;
     @Autowired private ActivationBasedEngine    activationBasedEngine;
-    @Autowired private SequentialEngine         sequentialEngine;
     @Autowired private TraversalHelper          traversalHelper;
     @Autowired private WorkflowGraphCompiler     graphCompiler;
     @Autowired @Lazy private EventRoutingService eventRoutingService;
@@ -207,25 +206,6 @@ public class GraphTraversalEngine {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Activation-based helpers
-    // -----------------------------------------------------------------------
-
-    /** Determines whether the graph uses activation-condition / join-type patterns. */
-    private boolean isActivationBased(WorkflowGraphDto graph) {
-        for (WorkflowNodeDto node : graph.getNodes()) {
-            if (node.getData() == null) continue;
-            String cond = traversalHelper.extractString(node.getData(), "activationCondition");
-            String rule = traversalHelper.extractString(node.getData(), "businessEligibilityRule");
-            String join = traversalHelper.extractString(node.getData(), "joinType");
-            if ((cond != null && !cond.trim().isEmpty())
-                    || (rule != null && !rule.trim().isEmpty())
-                    || (join != null && !join.trim().isEmpty())) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     // -----------------------------------------------------------------------
     // Command execution (kept here because it needs CommandRegistry)
