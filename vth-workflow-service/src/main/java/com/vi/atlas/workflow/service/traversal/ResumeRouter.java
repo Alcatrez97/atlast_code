@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +36,7 @@ public class ResumeRouter {
 
     @Autowired private RuntimeGraphManager    runtimeGraphManager;
     @Autowired private EdgeSelector           edgeSelector;
+    @Autowired private TaskRecorder           taskRecorder;
 
     // -----------------------------------------------------------------------
     // Sequential traversal resume
@@ -124,27 +126,26 @@ public class ResumeRouter {
 
         if ("SUB_WORKFLOW".equalsIgnoreCase(nodeType)) {
             applySubWorkflowOutputMapping(suspendedNode, state);
-
-        } else if ("WAIT_EVENT".equalsIgnoreCase(nodeType)) {
-            String routingValue = extractRoutingValue(state.context);
-
-            String targetNodeId = resolveRouteTarget(suspendedNode, routingValue);
-            if (targetNodeId == null) {
-                targetNodeId = extractString(suspendedNode.getData(), "defaultRoute");
+        } else if ("COMMAND".equalsIgnoreCase(nodeType)) {
+            String executionMode = extractString(suspendedNode.getData(), "executionMode");
+            if ("ASYNC".equalsIgnoreCase(executionMode)) {
+                Map<String, Object> output = taskRecorder.getTaskOutput(state.instanceId, startNodeId);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> parentObj = (Map<String, Object>)
+                        state.context.computeIfAbsent("commandOutputs", k -> new HashMap<String, Object>());
+                parentObj.put(startNodeId, output);
+                applyOutputMapping(suspendedNode.getData(), output, state.context);
             }
+        }
 
-            if (targetNodeId != null && !targetNodeId.isBlank()
-                    && state.nodeMap.containsKey(targetNodeId)) {
-                WorkflowNodeDto targetNode = state.nodeMap.get(targetNodeId);
-                runtimeGraphManager.markNodeActive(
-                        targetNode, state.activeNodes, state.instance, state.runtimeGraph);
-
-                final String finalTarget = targetNodeId;
-                state.version.getDefinition().getEdges().stream()
-                        .filter(e -> startNodeId.equals(e.getSource())
-                                && finalTarget.equals(e.getTarget()))
-                        .findFirst()
-                        .ifPresent(edgeObj -> runtimeGraphManager.markEdgeActive(edgeObj, state.activeEdges));
+        // Sync in-memory task status cache so the activation loop can advance downstream nodes
+        TraversalContext travCtx = TraversalContextHolder.get();
+        if (travCtx != null) {
+            if (travCtx.localTaskStatuses != null) {
+                travCtx.localTaskStatuses.put(startNodeId, "COMPLETED");
+            }
+            if (travCtx.suspendedNodes != null) {
+                travCtx.suspendedNodes.remove(suspendedNode);
             }
         }
 
@@ -177,6 +178,13 @@ public class ResumeRouter {
         }
 
         if (travCtx.suspendedNodes != null) travCtx.suspendedNodes.remove(suspendedNode);
+
+        if (travCtx.localTaskStatuses != null) {
+            travCtx.localTaskStatuses.put(targetNodeId, "COMPLETED");
+            if (payload != null && travCtx.localTaskOutputs != null) {
+                travCtx.localTaskOutputs.put(targetNodeId, new HashMap<>(payload));
+            }
+        }
 
         // Determine routing value from payload
         String routingValue = null;
@@ -312,7 +320,8 @@ public class ResumeRouter {
         return nextNode;
     }
 
-    private static String extractRoutingValue(Map<String, Object> context) {
+    static String extractRoutingValue(Map<String, Object> context) {
+        if (context == null) return null;
         for (String key : List.of("status", "value", "outcome")) {
             if (context.containsKey(key) && context.get(key) != null) {
                 return String.valueOf(context.get(key));
@@ -325,7 +334,7 @@ public class ResumeRouter {
         return resolveRouteTargetStatic(node, routingValue);
     }
 
-    private static String resolveRouteTargetStatic(WorkflowNodeDto node, String routingValue) {
+    static String resolveRouteTargetStatic(WorkflowNodeDto node, String routingValue) {
         if (routingValue == null || node.getData() == null) return null;
         Object routesObj = node.getData().get("routes");
         if (!(routesObj instanceof List)) return null;
@@ -385,6 +394,43 @@ public class ResumeRouter {
         } else {
             // Default backward compatible behavior: merge all payload entries
             targetContext.putAll(payload);
+        }
+    }
+
+    /**
+     * Applies output mapping from nodeData to context for completed COMMAND nodes.
+     */
+    public static void applyOutputMapping(Map<String, Object> nodeData,
+                                           Map<String, Object> commandOutput,
+                                           Map<String, Object> context) {
+        Object outputMappingObj = nodeData != null ? nodeData.get("outputMapping") : null;
+        if (!(outputMappingObj instanceof Map) || commandOutput == null || context == null) return;
+        @SuppressWarnings("unchecked")
+        Map<?, ?> outputMap = (Map<?, ?>) outputMappingObj;
+        for (Map.Entry<?, ?> entry : outputMap.entrySet()) {
+            String k = String.valueOf(entry.getKey());
+            String v = String.valueOf(entry.getValue());
+
+            String responseKey;
+            String targetContextKey;
+
+            if (v.startsWith("context.") || (!commandOutput.containsKey(v) && commandOutput.containsKey(k))) {
+                responseKey = k;
+                targetContextKey = v;
+            } else if (k.startsWith("context.") || (!commandOutput.containsKey(k) && commandOutput.containsKey(v))) {
+                responseKey = v;
+                targetContextKey = k;
+            } else {
+                responseKey = k;
+                targetContextKey = v;
+            }
+
+            Object val = commandOutput.get(responseKey);
+            if (val != null) {
+                String contextKey = targetContextKey.startsWith("context.")
+                        ? targetContextKey.substring(8) : targetContextKey;
+                context.put(contextKey, val);
+            }
         }
     }
 }

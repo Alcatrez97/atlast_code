@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.event.listener;
 
+import com.vi.atlas.common.context.WorkflowContext;
 import com.vi.atlas.common.dto.BucketResolutionEvent;
 import com.vi.atlas.common.dto.CafSubmittedEvent;
 import com.vi.atlas.common.dto.ExecutionRequestDto;
@@ -103,49 +104,19 @@ public class KafkaEventListener {
             }
         }
 
-        // Resolve circleId across all variants in executionContext & payloadMap
-        Object resolvedCircleId = null;
-        for (String cKey : new String[] {
-                "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
-                "circle-id", "circleID", "CircleID", "CIRCLEID"
-        }) {
-            if (executionContext.get(cKey) != null) {
-                resolvedCircleId = executionContext.get(cKey);
-                break;
-            }
-            if (payloadMap.get(cKey) != null) {
-                resolvedCircleId = payloadMap.get(cKey);
-                break;
-            }
+        // Canonical context normalization via WorkflowContext
+        WorkflowContext wfCtx = WorkflowContext.from(executionContext);
+        if (event.getCircleId() != null) {
+            wfCtx.asMap().putIfAbsent(WorkflowContext.KEY_CIRCLE_ID, event.getCircleId());
         }
-        if (resolvedCircleId == null && event.getCircleId() != null) {
-            resolvedCircleId = event.getCircleId();
+        if (event.getCafId() != null) {
+            wfCtx.asMap().putIfAbsent(WorkflowContext.KEY_CAF_ID, event.getCafId());
         }
-        if (resolvedCircleId != null) {
-            executionContext.put("circleId", resolvedCircleId);
-        }
+        wfCtx.normalize();
 
-        // Resolve cafId / businessKey / contextId
-        Object resolvedCafId = null;
-        for (String k : new String[] { "cafId", "caf_id", "cafid", "CafId", "CAF_ID" }) {
-            if (executionContext.get(k) != null) {
-                resolvedCafId = executionContext.get(k);
-                break;
-            }
-            if (payloadMap.get(k) != null) {
-                resolvedCafId = payloadMap.get(k);
-                break;
-            }
-        }
-        if (resolvedCafId == null && event.getCafId() != null) {
-            resolvedCafId = event.getCafId();
-        }
-        if (resolvedCafId != null) {
-            executionContext.putIfAbsent("cafId", resolvedCafId);
-        }
-
-        String effectiveContextId = event.getContextId() != null ? event.getContextId() : (resolvedCafId != null ? String.valueOf(resolvedCafId) : event.getCafId());
-        String businessKey = event.getBusinessKey() != null ? event.getBusinessKey() : (resolvedCafId != null ? String.valueOf(resolvedCafId) : effectiveContextId);
+        Integer resolvedCircleId = wfCtx.getCircleId();
+        String effectiveContextId = event.getContextId() != null ? event.getContextId() : wfCtx.getContextId();
+        String businessKey = event.getBusinessKey() != null ? event.getBusinessKey() : wfCtx.getBusinessKey();
 
         String workflowKey = event.getWorkflowKey();
         if (workflowKey == null || workflowKey.isBlank()) {

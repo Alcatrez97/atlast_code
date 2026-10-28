@@ -24,9 +24,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Helper component that contains the sequential (pointerâ€‘based) traversal algorithm.
- * Extracted from {@link GraphTraversalEngine} to improve readability.
+ * Helper component that contains the sequential (pointer‑based) traversal algorithm.
+ * @deprecated Deprecated as part of engine consolidation; all traversals now execute
+ *             through {@link ActivationBasedEngine}.
  */
+@Deprecated
 @Component
 public class SequentialEngine {
 

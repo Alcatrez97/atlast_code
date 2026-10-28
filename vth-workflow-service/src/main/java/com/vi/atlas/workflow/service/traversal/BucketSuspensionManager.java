@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.service.traversal;
 
+import com.vi.atlas.common.context.WorkflowContext;
 import com.vi.atlas.common.dto.WorkflowNodeDto;
 import com.vi.atlas.workflow.entity.*;
 import com.vi.atlas.workflow.repository.*;
@@ -195,11 +196,8 @@ public class BucketSuspensionManager {
                     entTypeId = bucketOpt.get().getEntTypeId().trim();
                 }
             }
-            if (entTypeId == null && context != null && context.get("entTypeId") != null) {
-                entTypeId = context.get("entTypeId").toString().trim();
-            }
-            if (entTypeId == null || entTypeId.isBlank()) {
-                entTypeId = "WORKFLOW_ENGINE";
+            if (entTypeId == null) {
+                entTypeId = WorkflowContext.from(context).getEntTypeId("WORKFLOW_ENGINE");
             }
 
             int seqNumber = entityRevertRepository.findTopByCafIdOrderByRevertSeqNumberDesc(cafId)
@@ -258,48 +256,18 @@ public class BucketSuspensionManager {
         if (context == null && TraversalContextHolder.get() != null) {
             context = TraversalContextHolder.get().context;
         }
-        if (context != null) {
-            for (String key : new String[] {
-                    "cafId", "caf_id", "cafid", "CafId", "CAF_ID",
-                    "businessKey", "business_key", "formId", "form_id"
-            }) {
-                Object cafObj = context.get(key);
-                if (cafObj != null) {
-                    Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(cafObj);
-                    if (parsed != null) {
-                        return parsed;
-                    }
-                }
-            }
+        Long cafId = WorkflowContext.from(context).getCafId();
+        if (cafId != null) {
+            return cafId;
         }
-        if (formId != null) {
-            Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(formId);
-            if (parsed != null) {
-                return parsed;
-            }
-        }
-        return null;
+        return WorkflowContext.parseStrictNumeric(formId);
     }
 
     private Integer resolveCircleId(java.util.Map<String, Object> context) {
         if (context == null && TraversalContextHolder.get() != null) {
             context = TraversalContextHolder.get().context;
         }
-        if (context != null) {
-            for (String key : new String[] {
-                    "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
-                    "circle-id", "circleID", "CircleID", "CIRCLEID"
-            }) {
-                Object circleObj = context.get(key);
-                if (circleObj != null) {
-                    Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(circleObj);
-                    if (parsed != null) {
-                        return parsed.intValue();
-                    }
-                }
-            }
-        }
-        return 1; // Default fallback circle ID
+        return WorkflowContext.from(context).getCircleId(1);
     }
 
     // -----------------------------------------------------------------------

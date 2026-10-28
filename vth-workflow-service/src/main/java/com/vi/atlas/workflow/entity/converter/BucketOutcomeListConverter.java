@@ -1,8 +1,6 @@
 package com.vi.atlas.workflow.entity.converter;
 
-import com.vi.atlas.common.dto.BucketOutcomeDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
@@ -13,13 +11,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Converter(autoApply = true)
-public class BucketOutcomeListConverter implements AttributeConverter<List<BucketOutcomeDto>, String> {
+public class BucketOutcomeListConverter implements AttributeConverter<List<com.vi.atlas.common.dto.BucketOutcomeDto>, String> {
 
     private static final Logger log = LoggerFactory.getLogger(BucketOutcomeListConverter.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public String convertToDatabaseColumn(List<BucketOutcomeDto> attribute) {
+    public String convertToDatabaseColumn(List<com.vi.atlas.common.dto.BucketOutcomeDto> attribute) {
         if (attribute == null) {
             return null;
         }
@@ -32,12 +30,12 @@ public class BucketOutcomeListConverter implements AttributeConverter<List<Bucke
     }
 
     @Override
-    public List<BucketOutcomeDto> convertToEntityAttribute(String dbData) {
+    public List<com.vi.atlas.common.dto.BucketOutcomeDto> convertToEntityAttribute(String dbData) {
         if (dbData == null || dbData.trim().isEmpty()) {
             return new ArrayList<>();
         }
         try {
-            return objectMapper.readValue(dbData, objectMapper.getTypeFactory().constructCollectionType(List.class, BucketOutcomeDto.class));
+            return objectMapper.readValue(dbData, objectMapper.getTypeFactory().constructCollectionType(List.class, com.vi.atlas.common.dto.BucketOutcomeDto.class));
         } catch (JsonProcessingException e) {
             log.error("Error deserializing JSON to List<BucketOutcomeDto>", e);
             throw new IllegalArgumentException("Error deserializing bucket outcomes", e);

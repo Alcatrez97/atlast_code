@@ -1,6 +1,11 @@
 package com.vi.atlas.workflow.service;
 
-import com.vi.atlas.common.dto.*;
+import com.vi.atlas.common.dto.ExecutionLogDto;
+import com.vi.atlas.common.dto.ExecutionRequestDto;
+import com.vi.atlas.common.dto.WorkflowDefinitionDto;
+import com.vi.atlas.common.dto.WorkflowEdgeDto;
+import com.vi.atlas.common.dto.WorkflowGraphDto;
+import com.vi.atlas.common.dto.WorkflowNodeDto;
 import com.vi.atlas.workflow.entity.TaskInstance;
 import com.vi.atlas.workflow.entity.WorkflowInstance;
 import com.vi.atlas.workflow.repository.TaskInstanceRepository;
@@ -20,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(properties = {
     "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
-    "spring.datasource.url=jdbc:h2:mem:nodeacttest;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL"
+    "spring.datasource.url=jdbc:h2:mem:nodeacttest;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=KEY,VALUE"
 })
 @Transactional
 @ActiveProfiles("test")

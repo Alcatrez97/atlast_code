@@ -1,50 +1,37 @@
 package com.vi.atlas.workflow.service.traversal;
 
+import com.vi.atlas.common.dto.StepRecordDto;
+import com.vi.atlas.common.dto.WorkflowGraphDto;
+import com.vi.atlas.common.dto.WorkflowNodeDto;
 import com.vi.atlas.workflow.entity.WorkflowInstance;
 import com.vi.atlas.workflow.entity.WorkflowVersion;
-import com.vi.atlas.common.dto.StepRecordDto;
-import com.vi.atlas.common.dto.WorkflowEdgeDto;
-import com.vi.atlas.common.dto.WorkflowNodeDto;
-import com.vi.atlas.common.dto.WorkflowGraphDto;
-import com.vi.atlas.workflow.service.command.CommandRegistry;
-import com.vi.atlas.workflow.service.ExecutionService;
-import com.vi.atlas.workflow.service.EventRoutingService;
-import com.vi.atlas.workflow.service.traversal.NodeExecutionResult;
+import com.vi.atlas.workflow.service.traversal.node.NodeExecutor;
 import com.vi.atlas.workflow.service.traversal.node.NodeExecutorRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
- * Helper component that contains the activationâ€‘based traversal algorithm.
+ * Helper component that contains the activation‑based traversal algorithm.
  * Extracted from {@link GraphTraversalEngine} to improve readability.
  */
 @Component
 public class ActivationBasedEngine {
 
     private static final Logger log = LoggerFactory.getLogger(ActivationBasedEngine.class);
-    private static final int MAX_STEPS = 200; // keep same circuitâ€‘breaker
+    private static final int MAX_STEPS = 200; // keep same circuit‑breaker
 
     // ---- Collaborator beans ----
     @Autowired private TraversalHelper traversalHelper;
-    @Autowired private SpelEvaluator spelEvaluator;
-    @Autowired private EdgeSelector edgeSelector;
     @Autowired private RuntimeGraphManager runtimeGraphManager;
     @Autowired private TaskRecorder taskRecorder;
-    @Autowired private EventSubscriptionManager eventSubscriptionManager;
-    @Autowired private BucketSuspensionManager bucketSuspensionManager;
     @Autowired private ResumeRouter resumeRouter;
     @Autowired private NodeExecutorRegistry nodeExecutorRegistry;
-    @Autowired private CommandRegistry commandRegistry;
-    @Autowired @Lazy private ExecutionService executionService;
-    @Autowired @Lazy private EventRoutingService eventRoutingService;
 
     public GraphTraversalEngine.TraversalResult runActivationBasedTraversal(
             WorkflowGraphDto graph,
@@ -143,115 +130,29 @@ public class ActivationBasedEngine {
                     taskRecorder.flushPendingTasks(instanceId);
                 }
 
-                switch (nodeType) {
-                    case "BUCKET" -> {
-                        var ti = taskRecorder.recordTaskStart(instance, node, state.context);
-                        taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
-                        taskRecorder.flushPendingTasks(instanceId);
-                        step.setStatus("WAITING");
-                        step.setNotes("Suspended execution. Waiting on business outcome bucket: " + step.getLabel());
-                        step.setExitedAt(LocalDateTime.now());
-                        trace.add(step);
+                // Delegate node execution to the corresponding NodeExecutor from the registry
+                NodeExecutor executor = nodeExecutorRegistry.get(nodeType);
+                NodeExecutionResult result = executor.execute(node, state, step, trace);
 
+                if (!trace.contains(step)) {
+                    step.setExitedAt(LocalDateTime.now());
+                    trace.add(step);
+                }
+
+                if (result.isSuspended()) {
+                    taskRecorder.flushPendingTasks(instanceId);
+                    suspended = true;
+                    suspendedNodeId = node.getId();
+                    suspendedNodeLabel = node.getLabel();
+                    if ("BUCKET".equalsIgnoreCase(nodeType)) {
                         String bucketId = node.getData() != null ? (String) node.getData().get("bucketId") : null;
                         if (bucketId == null) bucketId = node.getId();
                         outcomeBucketId = bucketId;
-
-                        bucketSuspensionManager.createBucketRevertStatusAndFormPending(instanceId, contextId, bucketId, node, version, state.context);
-                        eventSubscriptionManager.createEventSubscription(instance, bucketId, node.getId(), Map.of());
-
-                        suspended = true;
-                        suspendedNodeId = node.getId();
-                        suspendedNodeLabel = node.getLabel();
-                        progress = true;
-                    }
-                    case "SUB_WORKFLOW" -> {
-                        NodeExecutionResult result = nodeExecutorRegistry.get("SUB_WORKFLOW")
-                                .execute(node, state, step, trace);
-                        if (result.isSuspended()) {
-                            suspended = true;
-                            suspendedNodeId = node.getId();
-                            suspendedNodeLabel = node.getLabel();
-                        }
-                        progress = true;
-                    }
-                    case "COMMAND" -> {
-                        NodeExecutionResult result = nodeExecutorRegistry.get("COMMAND")
-                                .execute(node, state, step, trace);
-                        if (result.isSuspended()) {
-                            suspended = true;
-                            suspendedNodeId = node.getId();
-                            suspendedNodeLabel = node.getLabel();
-                        }
-                        progress = true;
-                    }
-                    case "WAIT_EVENT" -> {
-                        var ti = taskRecorder.recordTaskStart(instance, node, state.context);
-                        taskRecorder.recordTaskCompletion(ti, Map.of(), "WAITING");
-                        taskRecorder.flushPendingTasks(instanceId);
-                        String eventType = traversalHelper.extractString(node.getData(), "eventType");
-                        if (eventType == null || eventType.isBlank()) eventType = "GENERIC_EVENT";
-                        step.setStatus("WAITING");
-                        step.setNotes("Suspended execution. Waiting on event: " + eventType);
-                        step.setExitedAt(LocalDateTime.now());
-                        trace.add(step);
-                        eventSubscriptionManager.createEventSubscription(instance, eventType, node.getId(), Map.of());
-                        suspended = true;
-                        suspendedNodeId = node.getId();
-                        suspendedNodeLabel = node.getLabel();
-                        progress = true;
-                    }
-                    case "RULE" -> {
-                        NodeExecutionResult result = nodeExecutorRegistry.get("RULE")
-                                .execute(node, state, step, trace);
-                        step.setExitedAt(LocalDateTime.now());
-                        if (!trace.contains(step)) trace.add(step);
-                        progress = true;
-                    }
-                    case "DECISION" -> {
-                        nodeExecutorRegistry.get("DECISION").execute(node, state, step, trace);
-                        step.setExitedAt(LocalDateTime.now());
-                        if (!trace.contains(step)) trace.add(step);
-                        progress = true;
-                    }
-                    case "TIMER" -> {
-                        nodeExecutorRegistry.get("TIMER").execute(node, state, step, trace);
-                        step.setExitedAt(LocalDateTime.now());
-                        if (!trace.contains(step)) trace.add(step);
-                        progress = true;
-                    }
-                    case "PARALLEL" -> {
-                        nodeExecutorRegistry.get("PARALLEL").execute(node, state, step, trace);
-                        step.setExitedAt(LocalDateTime.now());
-                        if (!trace.contains(step)) trace.add(step);
-                        progress = true;
-                    }
-                    case "JOIN" -> {
-                        nodeExecutorRegistry.get("JOIN").execute(node, state, step, trace);
-                        step.setExitedAt(LocalDateTime.now());
-                        if (!trace.contains(step)) trace.add(step);
-                        progress = true;
-                    }
-                    case "END" -> {
-                        var ti = taskRecorder.recordTaskStart(instance, node, state.context);
-                        taskRecorder.recordTaskCompletion(ti, Map.of(), "COMPLETED");
-                        step.setStatus("COMPLETED");
-                        step.setNotes("Workflow execution reached END node.");
-                        step.setExitedAt(LocalDateTime.now());
-                        trace.add(step);
-                        progress = true;
-                    }
-                    default -> {
-                        var ti = taskRecorder.recordTaskStart(instance, node, state.context);
-                        taskRecorder.recordTaskCompletion(ti, Map.of(), "COMPLETED");
-                        step.setStatus("COMPLETED");
-                        step.setExitedAt(LocalDateTime.now());
-                        trace.add(step);
-                        progress = true;
                     }
                 }
 
-                if (progress) break;
+                progress = true;
+                break;
             }
         }
 
@@ -259,18 +160,21 @@ public class ActivationBasedEngine {
             log.warn("Activation-based loop halted: exceeded max steps ({})", MAX_STEPS);
         }
 
-        if (!suspended) {
-            boolean endNodeCompleted = graph.getNodes().stream()
-                    .filter(n -> "END".equalsIgnoreCase(n.getType()))
-                    .anyMatch(n -> "COMPLETED".equalsIgnoreCase(taskRecorder.getTaskStatus(instanceId, n.getId())));
-            if (!endNodeCompleted) {
-                suspended = true;
-                for (WorkflowNodeDto node : graph.getNodes()) {
-                    if ("WAITING".equalsIgnoreCase(taskRecorder.getTaskStatus(instanceId, node.getId()))) {
-                        suspendedNodeId = node.getId();
-                        suspendedNodeLabel = node.getLabel();
-                        break;
-                    }
+        boolean endNodeCompleted = graph.getNodes().stream()
+                .filter(n -> "END".equalsIgnoreCase(n.getType()))
+                .anyMatch(n -> "COMPLETED".equalsIgnoreCase(taskRecorder.getTaskStatus(instanceId, n.getId())));
+
+        if (endNodeCompleted) {
+            suspended = false;
+            suspendedNodeId = null;
+            suspendedNodeLabel = null;
+        } else if (!suspended) {
+            suspended = true;
+            for (WorkflowNodeDto node : graph.getNodes()) {
+                if ("WAITING".equalsIgnoreCase(taskRecorder.getTaskStatus(instanceId, node.getId()))) {
+                    suspendedNodeId = node.getId();
+                    suspendedNodeLabel = node.getLabel();
+                    break;
                 }
             }
         }

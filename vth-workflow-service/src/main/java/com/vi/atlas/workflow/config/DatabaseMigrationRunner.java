@@ -173,8 +173,8 @@ public class DatabaseMigrationRunner {
                 stmt.execute("CREATE TABLE postpaid_entity_revert_dtl (" +
                         "revert_dtl_id BIGINT PRIMARY KEY, " +
                         "entity_revert_id BIGINT NOT NULL, " +
-                        "key VARCHAR(100) NOT NULL, " +
-                        "value VARCHAR(50), " +
+                        "\"key\" VARCHAR(100) NOT NULL, " +
+                        "\"value\" VARCHAR(50), " +
                         "created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
                 log.info("Created table postpaid_entity_revert_dtl successfully.");
             } else {

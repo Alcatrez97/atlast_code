@@ -30,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import com.vi.atlas.common.context.WorkflowContext;
 import com.vi.atlas.workflow.service.traversal.ResumeRouter;
 import com.vi.atlas.workflow.service.traversal.GraphTraversalEngine;
 import com.vi.atlas.workflow.service.context.ContextResolutionService;
@@ -160,35 +161,10 @@ public class ExecutionService {
             throw new IllegalStateException("Active version is not in PUBLISHED status.");
         }
 
-        // Make context mutable to support default value injection & validation metadata
-        Map<String, Object> context = request.getContext() != null
-                ? new HashMap<>(request.getContext())
-                : new HashMap<>();
-
-        // Resolve circleId from context or request
-        Integer circleId = null;
-        for (String cKey : new String[] {
-                "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
-                "circle-id", "circleID", "CircleID", "CIRCLEID"
-        }) {
-            Object cid = context.get(cKey);
-            if (cid != null) {
-                Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(cid);
-                if (parsed != null) {
-                    circleId = parsed.intValue();
-                    break;
-                }
-            }
-        }
-        if (circleId == null && request.getCircleId() != null) {
-            Long parsed = com.vi.atlas.workflow.entity.CustomerForm.parseCafId(request.getCircleId());
-            if (parsed != null) {
-                circleId = parsed.intValue();
-            }
-        }
-        if (circleId != null) {
-            context.putIfAbsent("circleId", circleId);
-        }
+        // Canonical context normalization via WorkflowContext
+        WorkflowContext wfCtx = WorkflowContext.of(request);
+        Map<String, Object> context = wfCtx.asMap();
+        Integer circleId = wfCtx.getCircleId();
 
         // Create parent WorkflowInstance
         String instanceId = UUID.randomUUID().toString();
@@ -199,30 +175,7 @@ public class ExecutionService {
             instance.setCircleId(circleId);
         }
 
-        String businessKey = request.getBusinessKey();
-        if (businessKey == null || businessKey.isBlank()) {
-            Object bKey = context.get("businessKey");
-            if (bKey != null) businessKey = String.valueOf(bKey);
-        }
-        if (businessKey == null || businessKey.isBlank()) {
-            Object cId = context.get("cafId");
-            if (cId != null) businessKey = String.valueOf(cId);
-        }
-        if (businessKey == null || businessKey.isBlank()) {
-            Object txnId = context.get("transactionId");
-            if (txnId != null) businessKey = String.valueOf(txnId);
-        }
-        if (businessKey == null || businessKey.isBlank()) {
-            Object orderId = context.get("orderId");
-            if (orderId != null) businessKey = String.valueOf(orderId);
-        }
-        if (businessKey == null || businessKey.isBlank()) {
-            Object trackingId = context.get("trackingId");
-            if (trackingId != null) businessKey = String.valueOf(trackingId);
-        }
-
         // Resolve primary contextId (Form / CAF / Order identifier)
-        String contextId = request.getContextId();
         String schemaPkValue = null;
         try {
             Optional<ContextSchemaDto> schemaOpt = contextSchemaService.getSchemaByKey(workflowKey);
@@ -236,47 +189,41 @@ public class ExecutionService {
             log.warn("Failed resolving schema contextIdField for {}: {}", workflowKey, e.getMessage());
         }
 
+        String contextId = request.getContextId();
         if (contextId == null || contextId.isBlank()) {
             if (schemaPkValue != null) {
                 contextId = schemaPkValue;
-            } else if (context.get("contextId") != null) {
-                contextId = String.valueOf(context.get("contextId"));
-            } else if (context.get("cafId") != null) {
-                contextId = String.valueOf(context.get("cafId"));
-            } else if (context.get("caf_id") != null) {
-                contextId = String.valueOf(context.get("caf_id"));
-            } else if (context.get("trackingId") != null) {
-                contextId = String.valueOf(context.get("trackingId"));
-            } else if (businessKey != null && !businessKey.isBlank()) {
-                contextId = businessKey;
             } else {
-                contextId = UUID.randomUUID().toString();
+                contextId = wfCtx.getContextId();
             }
         }
-        context.putIfAbsent("contextId", contextId);
+        if (contextId == null || contextId.isBlank()) {
+            contextId = UUID.randomUUID().toString();
+        }
+        wfCtx.setContextId(contextId);
 
+        String businessKey = request.getBusinessKey();
         if (businessKey == null || businessKey.isBlank()) {
             if (schemaPkValue != null) {
                 businessKey = schemaPkValue;
-            } else if (context.get("cafId") != null) {
-                businessKey = String.valueOf(context.get("cafId"));
-            } else if (context.get("caf_id") != null) {
-                businessKey = String.valueOf(context.get("caf_id"));
             } else {
-                businessKey = contextId;
+                businessKey = wfCtx.getBusinessKey();
             }
         }
         if (businessKey == null || businessKey.isBlank()) {
             businessKey = "BK-" + instanceId.substring(0, 8);
         }
+        wfCtx.setBusinessKey(businessKey);
         instance.setBusinessKey(businessKey);
 
         // Ensure numeric cafId is in context if available
-        if (context.get("cafId") == null) {
-            if (request.getContextId() != null && com.vi.atlas.workflow.entity.CustomerForm.parseCafId(request.getContextId()) != null) {
-                context.put("cafId", request.getContextId());
-            } else if (businessKey != null && com.vi.atlas.workflow.entity.CustomerForm.parseCafId(businessKey) != null) {
-                context.put("cafId", businessKey);
+        if (wfCtx.getCafId() == null) {
+            Long numericVal = WorkflowContext.parseStrictNumeric(contextId);
+            if (numericVal == null) {
+                numericVal = WorkflowContext.parseStrictNumeric(businessKey);
+            }
+            if (numericVal != null) {
+                wfCtx.setCafId(numericVal);
             }
         }
 
@@ -351,8 +298,12 @@ public class ExecutionService {
                 }
             }
 
-            outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getNodeId());
-            outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getLabel());
+            StepRecordDto terminalStep = result.isSuspended() ? null : trace.stream()
+                    .filter(s -> !"SKIPPED".equalsIgnoreCase(s.getStatus()))
+                    .reduce((first, second) -> second)
+                    .orElse(trace.isEmpty() ? null : trace.get(trace.size() - 1));
+            outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (terminalStep != null ? terminalStep.getNodeId() : null);
+            outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (terminalStep != null ? terminalStep.getLabel() : null);
             outcomeBucketId = result.getOutcomeBucketId();
             instance.setRuntimeGraph(result.getRuntimeGraph());
 
@@ -605,8 +556,12 @@ public class ExecutionService {
                 }
             }
 
-            outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getNodeId());
-            outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (trace.isEmpty() ? null : trace.get(trace.size() - 1).getLabel());
+            StepRecordDto terminalStep = result.isSuspended() ? null : trace.stream()
+                    .filter(s -> !"SKIPPED".equalsIgnoreCase(s.getStatus()))
+                    .reduce((first, second) -> second)
+                    .orElse(trace.isEmpty() ? null : trace.get(trace.size() - 1));
+            outcomeNodeId = result.isSuspended() ? result.getSuspendedNodeId() : (terminalStep != null ? terminalStep.getNodeId() : null);
+            outcomeNodeLabel = result.isSuspended() ? result.getSuspendedNodeLabel() : (terminalStep != null ? terminalStep.getLabel() : null);
             outcomeBucketId = result.getOutcomeBucketId();
             instance.setRuntimeGraph(result.getRuntimeGraph());
 
@@ -930,6 +885,16 @@ public class ExecutionService {
                     }
                 }
             }
+        }
+    }
+
+    private boolean isStrictNumeric(String val) {
+        if (val == null || val.isBlank()) return false;
+        try {
+            Long.parseLong(val.trim());
+            return true;
+        } catch (NumberFormatException ignored) {
+            return false;
         }
     }
 }

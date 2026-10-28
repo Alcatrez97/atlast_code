@@ -57,7 +57,7 @@ public class KafkaWorkflowTriggerCircleIdTest {
         assertEquals(12, request.getCircleId());
         assertNotNull(request.getContext());
         assertEquals(12, request.getContext().get("circleId"));
-        assertEquals("123456", request.getContext().get("cafId"));
+        assertEquals("123456", String.valueOf(request.getContext().get("cafId")));
     }
 
     @Test

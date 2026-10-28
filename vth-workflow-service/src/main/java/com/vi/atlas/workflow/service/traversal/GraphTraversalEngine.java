@@ -47,10 +47,6 @@ public class GraphTraversalEngine {
     @Autowired @Lazy private EventRoutingService eventRoutingService;
     @Autowired @org.springframework.beans.factory.annotation.Qualifier("workflowVirtualTaskExecutor") private java.util.concurrent.Executor virtualTaskExecutor;
 
-    // ---- ThreadLocal traversal context (shared with collaborators) ----
-
-    /** Public static ThreadLocal so synchronous traversal engine collaborators can access it on this thread. */
-    public static final ThreadLocal<TraversalContext> CURRENT_TRAVERSAL = new ThreadLocal<>();
 
     // -----------------------------------------------------------------------
     // Public API
@@ -176,7 +172,6 @@ public class GraphTraversalEngine {
         travCtx.suspendedNodes    = suspendedNodes;
         travCtx.localTaskStatuses = localTaskStatuses;
         travCtx.activeNodeIds     = activeNodeIds;
-        CURRENT_TRAVERSAL.set(travCtx);
         TraversalContextHolder.set(travCtx);
 
         // ---- Build TraversalExecutionState ----
@@ -197,17 +192,10 @@ public class GraphTraversalEngine {
         }
 
         try {
-            // Decide which traversal algorithm to run
-            if (isActivationBased(graph)) {
-                return activationBasedEngine.runActivationBasedTraversal(graph, state, startNodeId, trace, nodeMap,
-                        activeNodes, activeEdges, runtimeGraph, suspendedNodes, spelCtx,
-                        instance, instanceId, contextId, version, stepIdx);
-            } else {
-                return sequentialEngine.runSequentialTraversal(graph, state, startNodeId, trace, nodeMap,
-                        edgesBySource, activeNodes, activeEdges, runtimeGraph,
-                        activeFrontiers, suspendedNodes, spelCtx, instance, instanceId,
-                        contextId, version, stepIdx, context);
-            }
+            // Unify traversal: all workflows execute via ActivationBasedEngine
+            return activationBasedEngine.runActivationBasedTraversal(graph, state, startNodeId, trace, nodeMap,
+                    activeNodes, activeEdges, runtimeGraph, suspendedNodes, spelCtx,
+                    instance, instanceId, contextId, version, stepIdx);
         } finally {
             try {
                 taskRecorder.flushPendingTasks(instanceId);
@@ -215,7 +203,6 @@ public class GraphTraversalEngine {
                 log.warn("Error flushing pending in-memory tasks during traversal teardown for instanceId={}: {}",
                         instanceId, ex.getMessage());
             }
-            CURRENT_TRAVERSAL.remove();
             TraversalContextHolder.remove();
         }
     }
@@ -375,7 +362,6 @@ public class GraphTraversalEngine {
         taskRecorder.flushPendingTasks(instanceId);
 
         java.util.concurrent.CompletableFuture.runAsync(() -> {
-            CURRENT_TRAVERSAL.remove();
             TraversalContextHolder.remove();
             try {
                 Thread.sleep(150);

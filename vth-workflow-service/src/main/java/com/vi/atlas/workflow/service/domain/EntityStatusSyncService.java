@@ -1,5 +1,6 @@
 package com.vi.atlas.workflow.service.domain;
 
+import com.vi.atlas.common.context.WorkflowContext;
 import com.vi.atlas.common.dto.ContextSchemaDto;
 import com.vi.atlas.common.dto.DomainMappingDto;
 import com.vi.atlas.workflow.entity.CustomerForm;
@@ -94,42 +95,15 @@ public class EntityStatusSyncService {
     }
 
     private Long resolveCafId(String contextId, java.util.Map<String, Object> context) {
-        if (context != null) {
-            if (context.get("cafId") != null) {
-                Long parsed = CustomerForm.parseCafId(context.get("cafId"));
-                if (parsed != null)
-                    return parsed;
-            }
-            if (context.get("caf_id") != null) {
-                Long parsed = CustomerForm.parseCafId(context.get("caf_id"));
-                if (parsed != null)
-                    return parsed;
-            }
-            if (context.get("businessKey") != null) {
-                Long parsed = CustomerForm.parseCafId(context.get("businessKey"));
-                if (parsed != null)
-                    return parsed;
-            }
+        Long cafId = WorkflowContext.from(context).getCafId();
+        if (cafId != null) {
+            return cafId;
         }
         return CustomerForm.parseCafId(contextId);
     }
 
     private Integer resolveCircleId(java.util.Map<String, Object> context) {
-        if (context != null) {
-            // Try all common variants of circleId key
-            for (String key : new String[] {
-                    "circleId", "circle_id", "circleid", "CircleId", "CIRCLE_ID",
-                    "circle-id", "circleID", "CircleID", "CIRCLEID"
-            }) {
-                Object cid = context.get(key);
-                if (cid != null) {
-                    Long parsed = CustomerForm.parseCafId(cid);
-                    if (parsed != null)
-                        return parsed.intValue();
-                }
-            }
-        }
-        return 99;
+        return WorkflowContext.from(context).getCircleId(99);
     }
 
     private void syncGenericEntity(DomainMappingDto mapping, String contextId, String newStatus) {

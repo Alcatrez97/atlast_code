@@ -3,7 +3,7 @@ package com.vi.atlas.workflow.service.traversal.node;
 import com.vi.atlas.common.dto.StepRecordDto;
 import com.vi.atlas.common.dto.WorkflowEdgeDto;
 import com.vi.atlas.common.dto.WorkflowNodeDto;
-import com.vi.atlas.workflow.service.traversal.GraphTraversalEngine;
+import com.vi.atlas.workflow.service.traversal.TraversalContextHolder;
 import com.vi.atlas.workflow.service.traversal.NodeExecutionResult;
 import com.vi.atlas.workflow.service.traversal.RuntimeGraphManager;
 import com.vi.atlas.workflow.service.traversal.TaskRecorder;
@@ -37,7 +37,7 @@ public class ParallelNodeExecutor implements NodeExecutor {
         step.setNotes("Parallel split â€“ fanned out to " + outEdges.size() + " branches.");
 
         // Add all branch targets to the frontier (accessed via TraversalContext)
-        TraversalContext travCtx = GraphTraversalEngine.CURRENT_TRAVERSAL.get();
+        TraversalContext travCtx = TraversalContextHolder.get();
         for (WorkflowEdgeDto edge : outEdges) {
             WorkflowNodeDto targetNode = state.nodeMap.get(edge.getTarget());
             if (targetNode != null) {

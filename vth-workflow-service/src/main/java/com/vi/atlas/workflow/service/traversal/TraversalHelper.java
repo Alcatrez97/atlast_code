@@ -42,7 +42,7 @@ public class TraversalHelper {
             d.canEvaluate = true;
             return d;
         }
-        TraversalContext travCtx = GraphTraversalEngine.CURRENT_TRAVERSAL.get();
+        TraversalContext travCtx = TraversalContextHolder.get();
         List<WorkflowEdgeDto> incomingEdges = travCtx != null ? travCtx.edgesByTarget.getOrDefault(nodeId, List.of()) : List.of();
         if (incomingEdges.isEmpty()) {
             d.canEvaluate = true;
@@ -91,6 +91,29 @@ public class TraversalHelper {
                         activeIncoming.add(edge.getId());
                     } else {
                         skippedIncoming.add(edge.getId());
+                    }
+                } else if ("WAIT_EVENT".equals(srcType)) {
+                    String routingValue = ResumeRouter.extractRoutingValue(travCtx != null ? travCtx.context : null);
+                    String targetNodeId = ResumeRouter.resolveRouteTargetStatic(srcNode, routingValue);
+                    if (targetNodeId == null && srcNode != null && srcNode.getData() != null) {
+                        Object def = srcNode.getData().get("defaultRoute");
+                        if (def != null) targetNodeId = String.valueOf(def);
+                    }
+                    if (targetNodeId != null) {
+                        if (targetNodeId.equals(nodeId)) {
+                            activeIncoming.add(edge.getId());
+                        } else {
+                            skippedIncoming.add(edge.getId());
+                        }
+                    } else {
+                        String cond = extractString(edge.getData(), "condition");
+                        if (cond != null && !cond.trim().isEmpty()) {
+                            Object res = spelEvaluator.evaluate(cond, spelCtx);
+                            if (Boolean.TRUE.equals(res)) activeIncoming.add(edge.getId());
+                            else skippedIncoming.add(edge.getId());
+                        } else {
+                            activeIncoming.add(edge.getId());
+                        }
                     }
                 } else {
                     String cond = extractString(edge.getData(), "condition");
@@ -150,12 +173,12 @@ public class TraversalHelper {
     }
 
     public boolean isActiveNode(String nodeId) {
-        TraversalContext travCtx = GraphTraversalEngine.CURRENT_TRAVERSAL.get();
+        TraversalContext travCtx = TraversalContextHolder.get();
         return travCtx != null && travCtx.activeNodeIds != null && travCtx.activeNodeIds.contains(nodeId);
     }
 
     public void markIncomingEdgesActive(String nodeId, String instanceId, List<Map<String, Object>> activeEdges, TraversalExecutionState state) {
-        TraversalContext travCtx = GraphTraversalEngine.CURRENT_TRAVERSAL.get();
+        TraversalContext travCtx = TraversalContextHolder.get();
         if (travCtx == null) return;
         for (WorkflowEdgeDto edge : travCtx.edgesByTarget.getOrDefault(nodeId, List.of())) {
             if (taskRecorder.getTaskStatus(instanceId, edge.getSource()) != null) {
@@ -165,7 +188,7 @@ public class TraversalHelper {
     }
 
     public void markIncomingEdgesActiveForActivated(String nodeId, List<Map<String, Object>> activeEdges, TraversalExecutionState state) {
-        TraversalContext travCtx = GraphTraversalEngine.CURRENT_TRAVERSAL.get();
+        TraversalContext travCtx = TraversalContextHolder.get();
         if (travCtx == null) return;
         for (WorkflowEdgeDto edge : travCtx.edgesByTarget.getOrDefault(nodeId, List.of())) {
             if (isActiveNode(edge.getSource())) {

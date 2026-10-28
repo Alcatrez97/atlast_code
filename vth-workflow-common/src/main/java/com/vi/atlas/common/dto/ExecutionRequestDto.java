@@ -20,6 +20,9 @@ public class ExecutionRequestDto implements Serializable {
     @Schema(description = "Optional circle identifier (e.g. 10)", example = "10")
     private Object circleId;
 
+    @Schema(description = "Optional CAF identifier (e.g. 100234)", example = "100234")
+    private Object cafId;
+
     @Schema(description = "Flat or nested JSON context map passed into the workflow execution", 
             example = "{\"initial_param\": \"some_value\", \"amount\": 6500, \"birthYear\": 1998, \"currentYear\": 2024}")
     private Map<String, Object> context = new HashMap<>();
@@ -34,6 +37,9 @@ public class ExecutionRequestDto implements Serializable {
 
     public Object getCircleId() { return circleId; }
     public void setCircleId(Object circleId) { this.circleId = circleId; }
+
+    public Object getCafId() { return cafId; }
+    public void setCafId(Object cafId) { this.cafId = cafId; }
 
     public Map<String, Object> getContext() { return context; }
     public void setContext(Map<String, Object> context) {
