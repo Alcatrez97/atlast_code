@@ -32,6 +32,15 @@ public class KafkaEventListener {
     @Autowired
     private com.vi.atlas.workflow.repository.WorkflowInstanceRepository workflowInstanceRepository;
 
+    @Autowired
+    private com.vi.atlas.workflow.repository.EntityRevertRepository entityRevertRepository;
+
+    @Autowired
+    private com.vi.atlas.workflow.repository.RevertStatusRepository revertStatusRepository;
+
+    @Autowired(required = false)
+    private com.vi.atlas.workflow.repository.BucketExecutionRepository bucketExecutionRepository;
+
     private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
             new com.fasterxml.jackson.databind.ObjectMapper()
                     .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -156,48 +165,183 @@ public class KafkaEventListener {
         if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> cr) {
             payload = cr.value();
         }
-        BucketResolutionEvent event;
+
+        java.util.Map<String, Object> payloadMap = new java.util.HashMap<>();
+        BucketResolutionEvent event = null;
+
         if (payload instanceof BucketResolutionEvent bre) {
             event = bre;
-        } else if (payload instanceof String str) {
+            try {
+                payloadMap = OBJECT_MAPPER.convertValue(bre, new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
+            } catch (Exception ignored) {}
+        } else if (payload instanceof java.util.Map<?, ?> m) {
+            for (java.util.Map.Entry<?, ?> entry : m.entrySet()) {
+                if (entry.getKey() != null) {
+                    payloadMap.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+            try {
+                event = OBJECT_MAPPER.convertValue(payloadMap, BucketResolutionEvent.class);
+            } catch (Exception ignored) {}
+        } else if (payload instanceof String str && !str.isBlank()) {
+            try {
+                payloadMap = OBJECT_MAPPER.readValue(str, new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
+            } catch (Exception ignored) {}
             try {
                 event = OBJECT_MAPPER.readValue(str, BucketResolutionEvent.class);
             } catch (Exception ex) {
-                throw new IllegalArgumentException("Failed to deserialize BucketResolutionEvent JSON string", ex);
+                log.warn("Failed to deserialize BucketResolutionEvent directly from string: {}", ex.getMessage());
             }
-        } else {
-            event = OBJECT_MAPPER.convertValue(payload, BucketResolutionEvent.class);
         }
-        log.info("Received BucketResolutionEvent: instanceId={}, businessKey={}, bucketId={}, outcome={}",
-                event.getInstanceId(), event.getBusinessKey(), event.getBucketId(), event.getOutcome());
-        
+
+        if (event == null) {
+            event = new BucketResolutionEvent();
+        }
+
+        WorkflowContext wfCtx = WorkflowContext.from(payloadMap);
+        Long cafId = wfCtx.getCafId();
+        if (cafId == null && event.getCafId() != null) {
+            cafId = WorkflowContext.parseStrictNumeric(event.getCafId());
+        }
+
+        String businessKey = event.getBusinessKey();
+        if (businessKey == null || businessKey.isBlank()) {
+            businessKey = wfCtx.getBusinessKey();
+        }
+        if (businessKey == null || businessKey.isBlank()) {
+            if (cafId != null) businessKey = String.valueOf(cafId);
+            else if (wfCtx.getContextId() != null) businessKey = wfCtx.getContextId();
+        }
+
+        String bucketId = event.getBucketId();
+        if (bucketId == null || bucketId.isBlank()) {
+            if (payloadMap.get("bucket_id") != null) bucketId = String.valueOf(payloadMap.get("bucket_id"));
+            else if (payloadMap.get("bucketId") != null) bucketId = String.valueOf(payloadMap.get("bucketId"));
+        }
+
+        String outcome = event.getOutcome();
+        if (outcome == null || outcome.isBlank()) {
+            if (payloadMap.get("outcome") != null) outcome = String.valueOf(payloadMap.get("outcome"));
+            else if (payloadMap.get("status") != null) outcome = String.valueOf(payloadMap.get("status"));
+            else outcome = "Accept";
+        }
+
+        String notes = event.getResolutionNotes();
+        if (notes == null && payloadMap.get("resolutionNotes") != null) {
+            notes = String.valueOf(payloadMap.get("resolutionNotes"));
+        } else if (notes == null && payloadMap.get("resolution_notes") != null) {
+            notes = String.valueOf(payloadMap.get("resolution_notes"));
+        }
+
+        String instanceId = event.getInstanceId();
+        if (instanceId != null && instanceId.isBlank()) {
+            instanceId = null;
+        }
+
+        log.info("Received Kafka bucket resolution payload: instanceId={}, businessKey={}, cafId={}, bucketId={}, outcome={}",
+                instanceId, businessKey, cafId, bucketId, outcome);
+
         try {
-            // Trust the Identity Header if provided (Identity Propagation over Kafka)
-            String resolvedBy = (userId != null && !userId.isBlank()) ? userId : event.getResolvedBy();
-            
-            String instanceId = event.getInstanceId();
-            if (instanceId == null || instanceId.isBlank()) {
-                String key = event.getBusinessKey() != null ? event.getBusinessKey() : event.getCafId();
-                if (key != null && !key.isBlank()) {
-                    instanceId = workflowInstanceRepository.findFirstByBusinessKeyOrderByCreatedAtDesc(key)
+            // 1. Resolve instanceId from active EntityRevert table if instanceId is absent
+            if (instanceId == null && cafId != null) {
+                java.util.List<com.vi.atlas.workflow.entity.EntityRevert> reverts = entityRevertRepository.findByCafId(cafId);
+                for (com.vi.atlas.workflow.entity.EntityRevert er : reverts) {
+                    if (er.isActive() && (bucketId == null || bucketId.equalsIgnoreCase(er.getBucketId()))
+                            && !"COMPLETED".equalsIgnoreCase(er.getRevertStatus())
+                            && !"REVERTED".equalsIgnoreCase(er.getRevertStatus())) {
+                        instanceId = er.getWorkflowInstanceId();
+                        if (bucketId == null) {
+                            bucketId = er.getBucketId();
+                        }
+                        log.info("Resolved instanceId={} from active EntityRevert for cafId={}, bucketId={}",
+                                instanceId, cafId, bucketId);
+                        break;
+                    }
+                }
+            }
+
+            // 2. Resolve instanceId from WorkflowInstance repository by businessKey (prefer WAITING status)
+            if (instanceId == null && businessKey != null && !businessKey.isBlank()) {
+                instanceId = workflowInstanceRepository.findFirstByBusinessKeyAndStatusOrderByCreatedAtDesc(
+                        businessKey, com.vi.atlas.workflow.entity.WorkflowInstanceStatus.WAITING)
+                        .map(com.vi.atlas.workflow.entity.WorkflowInstance::getId)
+                        .orElse(null);
+
+                if (instanceId == null) {
+                    instanceId = workflowInstanceRepository.findFirstByBusinessKeyOrderByCreatedAtDesc(businessKey)
                             .map(com.vi.atlas.workflow.entity.WorkflowInstance::getId)
                             .orElse(null);
                 }
+                if (instanceId != null) {
+                    log.info("Resolved instanceId={} from WorkflowInstance by businessKey={}", instanceId, businessKey);
+                }
             }
+
+            // 3. Resolve instanceId from pending RevertStatus by formId / businessKey
+            if (instanceId == null && businessKey != null && !businessKey.isBlank()) {
+                java.util.List<com.vi.atlas.workflow.entity.RevertStatus> formReverts =
+                        revertStatusRepository.findByFormIdOrderByCreatedAtDesc(businessKey);
+                for (com.vi.atlas.workflow.entity.RevertStatus rs : formReverts) {
+                    if (com.vi.atlas.workflow.entity.RevertStepStatus.PENDING.equals(rs.getStatus())
+                            && (bucketId == null || bucketId.equalsIgnoreCase(rs.getBucketId()))) {
+                        instanceId = rs.getWorkflowInstanceId();
+                        if (bucketId == null) bucketId = rs.getBucketId();
+                        log.info("Resolved instanceId={} from pending RevertStatus for formId={}, bucketId={}",
+                                instanceId, businessKey, bucketId);
+                        break;
+                    }
+                }
+            }
+
+            // 4. If bucketId is still unknown, attempt to resolve from pending BucketExecution
+            if ((bucketId == null || bucketId.isBlank()) && instanceId != null && bucketExecutionRepository != null) {
+                java.util.List<com.vi.atlas.workflow.entity.BucketExecution> pendingBuckets =
+                        bucketExecutionRepository.findByWorkflowInstanceId(instanceId);
+                for (com.vi.atlas.workflow.entity.BucketExecution be : pendingBuckets) {
+                    if (!"RESOLVED".equalsIgnoreCase(be.getStatus())) {
+                        bucketId = be.getBucketId();
+                        log.info("Resolved pending bucketId={} from BucketExecution for instanceId={}", bucketId, instanceId);
+                        break;
+                    }
+                }
+            }
+
             if (instanceId == null || instanceId.isBlank()) {
-                throw new IllegalArgumentException("Cannot resolve bucket without valid instanceId or businessKey/cafId. Provided key: " + event.getBusinessKey());
+                throw new IllegalArgumentException(String.format(
+                        "Cannot resolve bucket without matching workflow instance. Provided identifiers: businessKey='%s', cafId='%s', bucketId='%s'",
+                        businessKey, cafId, bucketId));
+            }
+
+            if (bucketId == null || bucketId.isBlank()) {
+                throw new IllegalArgumentException(String.format(
+                        "Cannot resolve bucket without valid bucketId for instanceId='%s', businessKey='%s'",
+                        instanceId, businessKey));
+            }
+
+            // Normalize outcome prefix (e.g. 'A2Accept' -> 'Accept')
+            if (outcome != null && outcome.startsWith(bucketId) && outcome.length() > bucketId.length()) {
+                outcome = outcome.substring(bucketId.length());
+            }
+
+            // Trust the Identity Header if provided (Identity Propagation over Kafka)
+            String resolvedBy = (userId != null && !userId.isBlank()) ? userId : event.getResolvedBy();
+            if (resolvedBy == null || resolvedBy.isBlank()) {
+                if (payloadMap.get("resolvedBy") != null) resolvedBy = String.valueOf(payloadMap.get("resolvedBy"));
+                else if (payloadMap.get("resolved_by") != null) resolvedBy = String.valueOf(payloadMap.get("resolved_by"));
+                else resolvedBy = "ExternalApprovalSystem";
             }
 
             bucketResolutionService.resolveBucket(
                     instanceId,
-                    event.getBucketId(),
-                    event.getOutcome(),
+                    bucketId,
+                    outcome,
                     resolvedBy,
-                    event.getResolutionNotes()
+                    notes
             );
-            log.info("Successfully routed bucket resolution for instanceId={} (businessKey={})", instanceId, event.getBusinessKey());
+            log.info("Successfully routed bucket resolution for instanceId={} (businessKey={}, bucketId={})",
+                    instanceId, businessKey, bucketId);
         } catch (Exception e) {
-            log.error("Failed to process bucket resolution for event: {}", event, e);
+            log.error("Failed to process bucket resolution for payload: {}", rawPayload, e);
             throw e; // Delegate to Kafka error handler / DLQ
         }
     }

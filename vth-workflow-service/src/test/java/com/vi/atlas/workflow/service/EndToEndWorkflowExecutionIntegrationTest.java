@@ -281,18 +281,19 @@ public class EndToEndWorkflowExecutionIntegrationTest {
         assertTrue(revert.isActive(), "EntityRevert must be active");
 
         // ---------------------------------------------------------------------
-        // CRITERION 5: Resume workflow triggered via Kafka payload
+        // CRITERION 5: Resume workflow triggered via Kafka payload WITHOUT instanceId
+        // (External approval systems only have business identifiers like cafId / businessKey)
         // ---------------------------------------------------------------------
         String kafkaResolutionPayload = String.format("""
             {
-                "instanceId": "%s",
+                "cafId": %d,
                 "businessKey": "%s",
                 "bucketId": "A2",
                 "outcome": "Accept",
                 "resolvedBy": "SeniorOfficer_42",
                 "resolutionNotes": "All documents verified and accepted"
             }
-            """, instanceId, testCafId);
+            """, testCafId, testCafId);
 
         // Simulate incoming Kafka event on 'workflow-bucket-resolution' topic
         kafkaEventListener.handleBucketResolution(kafkaResolutionPayload, "SeniorOfficer_42");
@@ -329,7 +330,7 @@ public class EndToEndWorkflowExecutionIntegrationTest {
     }
 
     /**
-     * TEST B: Workflow creation via Kafka Trigger method.
+     * TEST B: Workflow creation via Kafka Trigger method and Kafka bucket resolution WITHOUT instanceId.
      */
     @Test
     public void testFullPipeline_KafkaTrigger_BucketSuspension_KafkaResume() throws Exception {
@@ -371,21 +372,66 @@ public class EndToEndWorkflowExecutionIntegrationTest {
         assertEquals("A2", er.getBucketId());
         assertEquals("A2_PENDING_MANUAL", er.getRevertStatus());
 
-        // Resume via Kafka
+        // Resume via Kafka WITHOUT instanceId (External system only provides cafId and bucketId)
         String resolutionPayload = String.format("""
             {
-                "instanceId": "%s",
-                "businessKey": "%s",
+                "cafId": %d,
                 "bucketId": "A2",
                 "outcome": "Accept",
                 "resolvedBy": "AutoApprover"
             }
-            """, instance.getId(), kafkaCafId);
+            """, kafkaCafId);
 
         kafkaEventListener.handleBucketResolution(resolutionPayload, "AutoApprover");
 
         // Verify completed
         WorkflowInstance resumed = instanceRepository.findById(instance.getId()).orElseThrow();
         assertEquals("COMPLETED", resumed.getStatus());
+    }
+
+    /**
+     * TEST C: Kafka bucket resolution without instanceId, with auto-detected bucketId
+     * and status prefix stripping ('A2Accept' -> 'Accept').
+     */
+    @Test
+    public void testKafkaBucketResolution_WithoutInstanceId_AutoDetectedBucketAndStatus() throws Exception {
+        Long testCafId = 771199L;
+        Integer testCircleId = 18;
+
+        ExecutionRequestDto request = new ExecutionRequestDto();
+        request.setContextId(String.valueOf(testCafId));
+        request.setBusinessKey(String.valueOf(testCafId));
+        request.setCircleId(testCircleId);
+        request.setContext(new HashMap<>(Map.of(
+                "cafId", testCafId,
+                "circleId", testCircleId,
+                "riskScore", 75,
+                "amount", 1200
+        )));
+
+        ExecutionLogDto response = executionService.execute(workflowKey, request);
+        assertNotNull(response);
+        String instanceId = response.getInstanceId();
+        assertEquals("WAITING", response.getStatus());
+
+        // Resolve via Kafka with ONLY cafId and telecom status 'A2Accept' (omits instanceId AND bucketId!)
+        String minimalKafkaPayload = String.format("""
+            {
+                "cafId": %d,
+                "status": "A2Accept",
+                "resolvedBy": "ExternalTeleQueueService"
+            }
+            """, testCafId);
+
+        kafkaEventListener.handleBucketResolution(minimalKafkaPayload, null);
+
+        // Verify workflow resumed and finished in COMPLETED status
+        WorkflowInstance completedInstance = instanceRepository.findById(instanceId).orElseThrow();
+        assertEquals("COMPLETED", completedInstance.getStatus(),
+                "Workflow must resolve and reach COMPLETED status even without instanceId or bucketId in Kafka payload");
+
+        EntityRevert revert = entityRevertRepository.findByWorkflowInstanceId(instanceId).get(0);
+        assertEquals("COMPLETED", revert.getRevertStatus());
+        assertEquals("ExternalTeleQueueService", revert.getRevertPersonId());
     }
 }

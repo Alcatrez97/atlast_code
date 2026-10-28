@@ -19,6 +19,7 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
     List<WorkflowInstance> findAllByOrderByCreatedAtDesc();
     long countByWorkflowVersionId(String versionId);
     Optional<WorkflowInstance> findFirstByBusinessKeyOrderByCreatedAtDesc(String businessKey);
+    Optional<WorkflowInstance> findFirstByBusinessKeyAndStatusOrderByCreatedAtDesc(String businessKey, WorkflowInstanceStatus status);
     Optional<WorkflowInstance> findFirstByWorkflowKeyAndBusinessKeyOrderByCreatedAtDesc(String workflowKey, String businessKey);
 
     @Query("SELECT wi FROM WorkflowInstance wi WHERE " +
